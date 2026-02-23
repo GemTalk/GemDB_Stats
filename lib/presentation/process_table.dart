@@ -17,12 +17,8 @@ class _ProcessTableState extends State<ProcessTable> {
   final List<PlutoRow> rows = DataManager().processes.values.map((process) {
     return PlutoRow(
       cells: {
-        'startTime': PlutoCell(
-          value: DateFormat('MM/dd HH:mm:ss').format(process.startTime),
-        ),
-        'endTime': PlutoCell(
-          value: DateFormat('MM/dd HH:mm:ss').format(process.endTime),
-        ),
+        'startTime': PlutoCell(value: DateFormat('MM/dd HH:mm:ss').format(process.startTime)),
+        'endTime': PlutoCell(value: DateFormat('MM/dd HH:mm:ss').format(process.endTime)),
         'file': PlutoCell(value: 1),
         'samples': PlutoCell(value: process.samples),
         'processId': PlutoCell(value: process.processId.toString()),

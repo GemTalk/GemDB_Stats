@@ -7,7 +7,6 @@ void main() {
       final dataManager = DataManager();
       expect(dataManager.statTypes.isNotEmpty, true);
       expect(dataManager.statTypes.values.first.name, isNotEmpty);
-      print(dataManager.processes.length);
     });
   });
 }

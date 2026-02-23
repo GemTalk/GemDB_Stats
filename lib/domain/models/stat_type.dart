@@ -5,6 +5,5 @@ class StatType {
   List<String> statistics;
 
   @override
-  String toString() =>
-      'StatType(id: $id, name: $name, statistics: $statistics)';
+  String toString() => 'StatType(id: $id, name: $name, statistics: $statistics)';
 }

@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
 class StatisticsTable extends StatefulWidget {
-  const StatisticsTable({
-    super.key,
-    required this.statistics,
-    this.onStatisticSelected,
-  });
+  const StatisticsTable({required this.statistics, super.key, this.onStatisticSelected});
 
   final List<String> statistics;
   final void Function(int?)? onStatisticSelected;
@@ -43,10 +39,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             color: isSelected ? Color(0xFFDCF5FF) : Colors.transparent,
             alignment: Alignment.centerLeft,
-            child: Text(
-              widget.statistics[index],
-              style: const TextStyle(fontSize: 14),
-            ),
+            child: Text(widget.statistics[index], style: const TextStyle(fontSize: 14)),
           ),
         );
       },

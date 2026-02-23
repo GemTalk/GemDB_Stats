@@ -20,21 +20,15 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(8.0),
-        child: MultiSplitView(
-          axis: .vertical,
-          initialAreas: [processTableArea(), statsTableArea()],
-        ),
+        child: MultiSplitView(axis: .vertical, initialAreas: [processTableArea(), statsTableArea()]),
       ),
     );
   }
 
   Area processTableArea() {
     return Area(
-      builder: (context, area) => Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.white,
-        ),
+      builder: (context, area) => DecoratedBox(
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), color: Colors.white),
         child: ProcessTable(
           onProcessSelected: (process) {
             setState(() {
@@ -48,11 +42,8 @@ class _HomePageState extends State<HomePage> {
 
   Area statsTableArea() {
     return Area(
-      builder: (context, area) => Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.white,
-        ),
+      builder: (context, area) => DecoratedBox(
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), color: Colors.white),
         child: selectedProcess != null
             ? StatisticsTable(
                 statistics: selectedProcess!.type.statistics,
