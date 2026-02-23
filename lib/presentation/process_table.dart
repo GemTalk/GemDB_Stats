@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pluto_grid/pluto_grid.dart';
 import 'package:vsd/domain/data_manager.dart';
+import 'package:vsd/domain/models/process.dart';
 
 class ProcessTable extends StatefulWidget {
-  const ProcessTable({super.key});
+  const ProcessTable({super.key, this.onProcessSelected});
+
+  final void Function(Process?)? onProcessSelected;
 
   @override
   State<ProcessTable> createState() => _ProcessTableState();
@@ -122,6 +125,15 @@ class _ProcessTableState extends State<ProcessTable> {
       onLoaded: (PlutoGridOnLoadedEvent event) {
         event.stateManager.setSelectingMode(PlutoGridSelectingMode.row);
         event.stateManager.setEditing(false);
+      },
+      onSelected: (PlutoGridOnSelectedEvent event) {
+        if (event.row != null) {
+          final processName = event.row!.cells['name']!.value as String;
+          final process = DataManager().processes[processName];
+          widget.onProcessSelected?.call(process);
+        } else {
+          widget.onProcessSelected?.call(null);
+        }
       },
     );
   }
