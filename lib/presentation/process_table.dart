@@ -110,6 +110,7 @@ class _ProcessTableState extends State<ProcessTable> {
           enableCellBorderHorizontal: false,
           enableCellBorderVertical: false,
           activatedBorderColor: Colors.transparent,
+          gridBorderColor: Colors.transparent,
           iconSize: 0,
         ),
         columnSize: PlutoGridColumnSizeConfig(resizeMode: PlutoResizeMode.none),
