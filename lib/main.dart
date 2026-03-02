@@ -3,9 +3,10 @@ import 'package:vsd/domain/data_manager.dart';
 import 'package:vsd/presentation/home_page.dart';
 import 'package:vsd/theme.dart';
 
-void main() {
+void main() async {
   // Initialize data manager to load data before UI builds
-  DataManager().loadData();
+  WidgetsFlutterBinding.ensureInitialized();
+  await DataManager().loadData();
 
   runApp(const MainApp());
 }
