@@ -40,7 +40,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             color: isSelected ? Color(0xFFDCF5FF) : Colors.transparent,
             alignment: Alignment.centerLeft,
-            child: Text(widget.statistics[index].name, style: const TextStyle(fontSize: 14)),
+            child: Text(widget.statistics[index].name, style: const TextStyle(fontSize: 13)),
           ),
         );
       },

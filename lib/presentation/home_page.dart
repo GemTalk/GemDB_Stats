@@ -73,7 +73,7 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(8.0),
               child: Text(
                 selectedProcess!.type.statistics[selectedStatistic!].description,
-                style: const TextStyle(fontSize: 16),
+                style: const TextStyle(fontSize: 13),
               ),
             )
           : const SizedBox.shrink(),

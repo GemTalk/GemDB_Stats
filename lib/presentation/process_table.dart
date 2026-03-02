@@ -105,8 +105,8 @@ class _ProcessTableState extends State<ProcessTable> {
         style: PlutoGridStyleConfig(
           rowHeight: 25,
           columnHeight: 30,
-          cellTextStyle: TextStyle(fontSize: 14),
-          columnTextStyle: TextStyle(fontSize: 14, fontWeight: .bold),
+          cellTextStyle: TextStyle(fontSize: 13),
+          columnTextStyle: TextStyle(fontSize: 13, fontWeight: .bold),
           enableCellBorderHorizontal: false,
           enableCellBorderVertical: false,
           activatedBorderColor: Colors.transparent,
