@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:vsd/domain/models/process.dart';
+import 'package:vsd/presentation/file_bar.dart';
 import 'package:vsd/presentation/process_table.dart';
 import 'package:vsd/presentation/statistics_table.dart';
 import 'package:vsd/theme.dart';
@@ -19,11 +20,18 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: multiSplitViewTheme(
-        child: MultiSplitView(
-          axis: .vertical,
-          initialAreas: [processTableArea(), statisticsArea()],
-        ),
+      body: Column(
+        children: [
+          FileBar(),
+          Expanded(
+            child: multiSplitViewTheme(
+              child: MultiSplitView(
+                axis: .vertical,
+                initialAreas: [processTableArea(), statisticsArea()],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -53,16 +61,28 @@ class _HomePageState extends State<HomePage> {
 
   Area statsTableArea() {
     return Area(
-      builder: (context, area) => selectedProcess != null
-          ? StatisticsTable(
-              statistics: selectedProcess!.type.statistics,
-              onStatisticSelected: (statistic) {
-                setState(() {
-                  selectedStatistic = statistic;
-                });
-              },
-            )
-          : const SizedBox.shrink(),
+      builder: (context, area) => ColoredBox(
+        color: Colors.white,
+        child: selectedProcess != null
+            ? StatisticsTable(
+                statistics: selectedProcess!.type.statistics,
+                onStatisticSelected: (statistic) {
+                  setState(() {
+                    selectedStatistic = statistic;
+                  });
+                },
+              )
+            : _buildEmptyState(),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Text(
+        'Select a process to view statistics',
+        style: TextStyle(fontSize: 13),
+      ),
     );
   }
 

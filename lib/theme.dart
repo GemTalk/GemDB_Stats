@@ -4,7 +4,7 @@ import 'package:multi_split_view/multi_split_view.dart';
 final theme = ThemeData(
   colorScheme: const ColorScheme(
     brightness: Brightness.light,
-    primary: Color(0xFF6200EE),
+    primary: Colors.black,
     onPrimary: Colors.white,
     secondary: Color(0xFF03DAC6),
     onSecondary: Colors.black,
