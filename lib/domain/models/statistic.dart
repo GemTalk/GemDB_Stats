@@ -1,3 +1,4 @@
+/// A class representing a statistic, parsed from vsd.stats.tcl
 class Statistic {
   Statistic({
     required this.name,
