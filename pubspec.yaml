@@ -7,6 +7,7 @@ environment:
   sdk: ^3.10.8
 
 dependencies:
+  cristalyse: ^1.17.6
   file_picker: ^10.3.10
   flutter:
     sdk: flutter

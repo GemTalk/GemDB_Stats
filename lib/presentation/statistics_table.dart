@@ -46,7 +46,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
               widget.selectedProcess.type.statistics[index].name,
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: !hasData ? .normal : FontWeight.bold,
+                fontWeight: !hasData ? .normal : .bold,
               ),
             ),
           ),
