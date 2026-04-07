@@ -24,7 +24,11 @@ class StatisticLineChart extends StatelessWidget {
     final minY = yValues.reduce((a, b) => a < b ? a : b);
     final maxY = yValues.reduce((a, b) => a > b ? a : b);
     final range = maxY - minY;
-    final padding = range == 0 ? (maxY.abs() * 0.02).clamp(0.001, 1.0) : range * 0.1;
+    final computedPadding = (range * 0.1).ceil();
+    final padding = computedPadding < 2 ? 2 : computedPadding;
+    final displayMinY = minY - padding;
+    final displayMaxY = maxY + padding;
+    final yTicks = _buildIntegerTicks(displayMinY, displayMaxY);
 
     final chartData = List.generate(
       points.length,
@@ -48,9 +52,32 @@ class StatisticLineChart extends StatelessWidget {
           max: points.last.timestamp.millisecondsSinceEpoch.toDouble(),
         )
         .scaleYContinuous(
-          min: minY - padding,
-          max: maxY + padding,
+          labels: (value) => value.round().toString(),
+          min: displayMinY.toDouble(),
+          max: displayMaxY.toDouble(),
+          tickConfig: TickConfig(ticks: yTicks),
         )
         .build();
+  }
+
+  List<double> _buildIntegerTicks(int min, int max) {
+    final span = max - min;
+    if (span <= 0) {
+      return [min.toDouble()];
+    }
+
+    if (span <= 6) {
+      return List.generate(span + 1, (index) => (min + index).toDouble());
+    }
+
+    final step = (span / 5).ceil();
+    final ticks = <double>[];
+    for (int value = min; value <= max; value += step) {
+      ticks.add(value.toDouble());
+    }
+    if (ticks.last != max.toDouble()) {
+      ticks.add(max.toDouble());
+    }
+    return ticks;
   }
 }

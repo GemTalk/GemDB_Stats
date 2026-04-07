@@ -184,7 +184,7 @@ class DataManager {
           final stat = existingProcess.type.statistics[i];
 
           existingProcess.statisticData[stat.name]!.points.add(
-            DataPoint(timestamp: timestamp, value: double.tryParse(parts[i]) ?? 0),
+            DataPoint(timestamp: timestamp, value: int.tryParse(parts[i]) ?? 0),
           );
         }
       } else {
@@ -205,7 +205,7 @@ class DataManager {
 
           newProcess.statisticData[stat.name] = TimeSeries(
             statistic: stat,
-            points: [DataPoint(timestamp: timestamp, value: double.tryParse(parts[i]) ?? 0)],
+            points: [DataPoint(timestamp: timestamp, value: int.tryParse(parts[i]) ?? 0)],
           );
         }
 
