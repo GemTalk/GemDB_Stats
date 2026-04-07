@@ -6,7 +6,7 @@ import 'package:vsd/theme.dart';
 void main() async {
   // Initialize data manager to load data before UI builds
   WidgetsFlutterBinding.ensureInitialized();
-  await DataManager().loadData();
+  await DataManager().loadAll();
 
   runApp(const MainApp());
 }

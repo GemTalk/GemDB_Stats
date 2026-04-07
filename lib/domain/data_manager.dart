@@ -3,6 +3,7 @@ import 'package:vsd/data/test.dart';
 import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/domain/models/stat_type.dart';
 import 'package:vsd/domain/models/statistic.dart';
+import 'package:vsd/domain/models/time_series.dart';
 
 class DataManager {
   factory DataManager() {
@@ -21,7 +22,7 @@ class DataManager {
     return processes.values.expand((list) => list).toList();
   }
 
-  Future<void> loadData() async {
+  Future<void> loadAll() async {
     await _instance.loadStatistics();
     _instance.loadStatTypes();
     _instance.loadProcesses();
@@ -177,19 +178,38 @@ class DataManager {
         // Update end time if process already exists (handles multiple entries for same process)
         existingProcess.endTime = timestamp;
         existingProcess.samples += 1;
+
+        // Add new data points to existing process
+        for (int i = 5; i < existingProcess.type.statistics.length; i++) {
+          final stat = existingProcess.type.statistics[i];
+
+          existingProcess.statisticData[stat.name]!.points.add(
+            DataPoint(timestamp: timestamp, value: double.tryParse(parts[i]) ?? 0),
+          );
+        }
       } else {
         // Otherwise, create new process entry
-        processes[processName]!.add(
-          Process(
-            name: processName,
-            type: statTypes[statTypeId]!,
-            startTime: timestamp,
-            endTime: timestamp,
-            samples: 1,
-            processId: processId,
-            sessionId: sessionId,
-          ),
+        final newProcess = Process(
+          name: processName,
+          type: statTypes[statTypeId]!,
+          startTime: timestamp,
+          endTime: timestamp,
+          samples: 1,
+          processId: processId,
+          sessionId: sessionId,
         );
+
+        // Initialize TimeSeries for each statistic in the StatType
+        for (int i = 5; i < newProcess.type.statistics.length; i++) {
+          final stat = newProcess.type.statistics[i];
+
+          newProcess.statisticData[stat.name] = TimeSeries(
+            statistic: stat,
+            points: [DataPoint(timestamp: timestamp, value: double.tryParse(parts[i]) ?? 0)],
+          );
+        }
+
+        processes[processName]!.add(newProcess);
       }
     }
   }

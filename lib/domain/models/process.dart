@@ -1,4 +1,5 @@
 import 'package:vsd/domain/models/stat_type.dart';
+import 'package:vsd/domain/models/time_series.dart';
 
 class Process {
   Process({
@@ -11,11 +12,12 @@ class Process {
     required this.sessionId,
   });
 
-  String name;
-  StatType type;
-  DateTime startTime;
+  final String name;
+  final StatType type;
+  final int processId;
+  final String sessionId;
+  final DateTime startTime;
   DateTime endTime;
   int samples;
-  int processId;
-  String sessionId;
+  final Map<String, TimeSeries> statisticData = {}; // Keyed by statistic name
 }
