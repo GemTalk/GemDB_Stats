@@ -66,7 +66,7 @@ class _HomePageState extends State<HomePage> {
         color: Colors.white,
         child: selectedProcess != null
             ? StatisticsTable(
-                statistics: selectedProcess!.type.statistics,
+                selectedProcess: selectedProcess!,
                 onStatisticSelected: (statistic) {
                   setState(() {
                     selectedStatistic = statistic;

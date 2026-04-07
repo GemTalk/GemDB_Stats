@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:vsd/domain/models/statistic.dart';
+import 'package:vsd/domain/models/process.dart';
 
 class StatisticsTable extends StatefulWidget {
-  const StatisticsTable({required this.statistics, super.key, this.onStatisticSelected});
+  const StatisticsTable({required this.selectedProcess, super.key, this.onStatisticSelected});
 
-  final List<Statistic> statistics;
+  final Process selectedProcess;
   final void Function(int?)? onStatisticSelected;
 
   @override
@@ -17,7 +17,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
   @override
   void didUpdateWidget(StatisticsTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.statistics != oldWidget.statistics) {
+    if (widget.selectedProcess != oldWidget.selectedProcess) {
       selectedIndex = null;
     }
   }
@@ -25,9 +25,11 @@ class _StatisticsTableState extends State<StatisticsTable> {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      itemCount: widget.statistics.length,
+      itemCount: widget.selectedProcess.type.statistics.length,
       itemBuilder: (context, index) {
         final isSelected = selectedIndex == index;
+        final hasData =
+            widget.selectedProcess.statisticData[widget.selectedProcess.type.statistics[index].name]?.hasData ?? false;
         return GestureDetector(
           onTap: () {
             setState(() {
@@ -40,7 +42,13 @@ class _StatisticsTableState extends State<StatisticsTable> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             color: isSelected ? Color(0xFFDCF5FF) : Colors.transparent,
             alignment: Alignment.centerLeft,
-            child: Text(widget.statistics[index].name, style: const TextStyle(fontSize: 13)),
+            child: Text(
+              widget.selectedProcess.type.statistics[index].name,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: !hasData ? .normal : FontWeight.bold,
+              ),
+            ),
           ),
         );
       },
