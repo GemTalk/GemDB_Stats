@@ -42,6 +42,7 @@ class _HomePageState extends State<HomePage> {
         onProcessSelected: (process) {
           setState(() {
             selectedProcess = process;
+            selectedStatistic = null;
           });
         },
       ),

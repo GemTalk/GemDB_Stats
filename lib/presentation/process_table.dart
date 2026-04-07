@@ -14,7 +14,7 @@ class ProcessTable extends StatefulWidget {
 }
 
 class _ProcessTableState extends State<ProcessTable> {
-  final List<PlutoRow> rows = DataManager().processes.values.map((process) {
+  final List<PlutoRow> rows = DataManager().allProcesses.map((process) {
     return PlutoRow(
       cells: {
         'startTime': PlutoCell(value: DateFormat('MM/dd HH:mm:ss').format(process.startTime)),
@@ -24,6 +24,7 @@ class _ProcessTableState extends State<ProcessTable> {
         'processId': PlutoCell(value: process.processId.toString()),
         'sessionId': PlutoCell(value: process.sessionId),
         'type': PlutoCell(value: process.type.name),
+        'typeId': PlutoCell(value: process.type.id), // Not displayed in the table, but used for finding the process
         'name': PlutoCell(value: process.name),
       },
     );
@@ -126,7 +127,16 @@ class _ProcessTableState extends State<ProcessTable> {
       onSelected: (PlutoGridOnSelectedEvent event) {
         if (event.row != null) {
           final processName = event.row!.cells['name']!.value as String;
-          final process = DataManager().processes[processName];
+          final processId = int.parse(event.row!.cells['processId']!.value as String);
+          final sessionId = event.row!.cells['sessionId']!.value as String;
+          final statTypeId = event.row!.cells['typeId']!.value as int;
+
+          final process = DataManager().findProcess(
+            statTypeId: statTypeId,
+            processName: processName,
+            processId: processId,
+            sessionId: sessionId,
+          );
           widget.onProcessSelected?.call(process);
         } else {
           widget.onProcessSelected?.call(null);

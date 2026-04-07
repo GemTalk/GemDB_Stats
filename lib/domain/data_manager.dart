@@ -13,8 +13,13 @@ class DataManager {
   static final DataManager _instance = DataManager._internal();
 
   final Map<int, StatType> statTypes = {}; // Keyed by stat type ID
-  final Map<String, Process> processes = {}; // Keyed by process name
+  final Map<String, List<Process>> processes = {}; // Keyed by process name, contains list of processes
   final Map<String, Statistic> statistics = {}; // Keyed by statistic name
+
+  /// Get all processes flattened into a single list
+  List<Process> get allProcesses {
+    return processes.values.expand((list) => list).toList();
+  }
 
   Future<void> loadData() async {
     await _instance.loadStatistics();
@@ -146,25 +151,69 @@ class DataManager {
       final parts = line.split(' ');
 
       final processName = parts[2];
+      final statTypeId = int.parse(parts[0]);
+      final processId = int.parse(parts[3]);
+      final sessionId = parts.length > 4 ? parts[4] : '';
       final timestamp = DateTime.fromMillisecondsSinceEpoch(int.parse(parts[1]) * 1000);
 
-      if (processes.containsKey(processName)) {
+      // Initialize list for this process name if it doesn't exist
+      if (!processes.containsKey(processName)) {
+        processes[processName] = [];
+      }
+
+      // Find existing process with matching StatTypeNum, ProcessName, ProcessId, SessionId
+      Process? existingProcess;
+      for (final process in processes[processName]!) {
+        if (process.type.id == statTypeId &&
+            process.name == processName &&
+            process.processId == processId &&
+            process.sessionId == sessionId) {
+          existingProcess = process;
+          break;
+        }
+      }
+
+      if (existingProcess != null) {
         // Update end time if process already exists (handles multiple entries for same process)
-        processes[processName]!.endTime = timestamp;
-        processes[processName]!.samples += 1;
-        continue;
+        existingProcess.endTime = timestamp;
+        existingProcess.samples += 1;
       } else {
         // Otherwise, create new process entry
-        processes[processName] = Process(
-          name: parts[2],
-          type: statTypes[int.parse(parts[0])]!,
-          startTime: timestamp,
-          endTime: timestamp,
-          samples: 1,
-          processId: int.parse(parts[3]),
-          sessionId: '',
+        processes[processName]!.add(
+          Process(
+            name: processName,
+            type: statTypes[statTypeId]!,
+            startTime: timestamp,
+            endTime: timestamp,
+            samples: 1,
+            processId: processId,
+            sessionId: sessionId,
+          ),
         );
       }
     }
+  }
+
+  /// Find a process by its unique identifiers: StatTypeNum, ProcessName, ProcessId, SessionId
+  Process? findProcess({
+    required int statTypeId,
+    required String processName,
+    required int processId,
+    required String sessionId,
+  }) {
+    final processList = processes[processName];
+    if (processList == null) {
+      return null;
+    }
+
+    for (final process in processList) {
+      if (process.type.id == statTypeId &&
+          process.name == processName &&
+          process.processId == processId &&
+          process.sessionId == sessionId) {
+        return process;
+      }
+    }
+    return null;
   }
 }
