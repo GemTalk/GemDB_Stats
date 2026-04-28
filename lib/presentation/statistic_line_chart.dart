@@ -26,7 +26,7 @@ class StatisticLineChart extends StatelessWidget {
     final range = maxY - minY;
     final computedPadding = (range * 0.1).ceil();
     final padding = computedPadding < 2 ? 2 : computedPadding;
-    final displayMinY = minY - padding;
+    final displayMinY = minY >= 0 ? 0 : minY - padding;
     final displayMaxY = maxY + padding;
     final yTicks = _buildIntegerTicks(displayMinY, displayMaxY);
 
