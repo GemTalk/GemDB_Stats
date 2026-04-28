@@ -17,8 +17,8 @@ class _ProcessTableState extends State<ProcessTable> {
   final List<PlutoRow> rows = DataManager().allProcesses.map((process) {
     return PlutoRow(
       cells: {
-        'startTime': PlutoCell(value: DateFormat('MM/dd HH:mm:ss').format(process.startTime)),
-        'endTime': PlutoCell(value: DateFormat('MM/dd HH:mm:ss').format(process.endTime)),
+        'startTime': PlutoCell(value: DateFormat('yyyy/MM/dd HH:mm:ss').format(process.startTime)),
+        'endTime': PlutoCell(value: DateFormat('yyyy/MM/dd HH:mm:ss').format(process.endTime)),
         'file': PlutoCell(value: 1),
         'samples': PlutoCell(value: process.samples),
         'processId': PlutoCell(value: process.processId.toString()),
@@ -37,7 +37,7 @@ class _ProcessTableState extends State<ProcessTable> {
       type: PlutoColumnType.text(),
       enableColumnDrag: false,
       enableContextMenu: false,
-      width: 125,
+      width: 155,
     ),
     PlutoColumn(
       title: 'End Time',
@@ -45,7 +45,7 @@ class _ProcessTableState extends State<ProcessTable> {
       type: PlutoColumnType.text(),
       enableColumnDrag: false,
       enableContextMenu: false,
-      width: 125,
+      width: 155,
     ),
     PlutoColumn(
       title: 'File',
@@ -77,7 +77,7 @@ class _ProcessTableState extends State<ProcessTable> {
       type: PlutoColumnType.text(),
       enableColumnDrag: false,
       enableContextMenu: false,
-      width: 100,
+      width: 110,
     ),
     PlutoColumn(
       title: 'Type',
