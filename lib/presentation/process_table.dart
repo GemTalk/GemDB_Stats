@@ -123,6 +123,10 @@ class _ProcessTableState extends State<ProcessTable> {
       onLoaded: (PlutoGridOnLoadedEvent event) {
         event.stateManager.setSelectingMode(PlutoGridSelectingMode.row);
         event.stateManager.setEditing(false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          event.stateManager.clearCurrentCell();
+          event.stateManager.clearCurrentSelecting();
+        });
       },
       onSelected: (PlutoGridOnSelectedEvent event) {
         if (event.row != null) {
