@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide SearchBar;
 import 'package:vsd/domain/models/process.dart';
+import 'package:vsd/presentation/components/search_bar.dart';
 
 class StatisticsTable extends StatefulWidget {
   const StatisticsTable({required this.selectedProcess, super.key, this.onStatisticSelected});
@@ -12,46 +13,83 @@ class StatisticsTable extends StatefulWidget {
 }
 
 class _StatisticsTableState extends State<StatisticsTable> {
+  final TextEditingController _searchController = TextEditingController();
   int? selectedIndex;
+  String searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(StatisticsTable oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedProcess != oldWidget.selectedProcess) {
       selectedIndex = null;
+      searchQuery = '';
+      _searchController.clear();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: widget.selectedProcess.type.statistics.length,
-      itemBuilder: (context, index) {
-        final isSelected = selectedIndex == index;
-        final hasData =
-            widget.selectedProcess.statisticData[widget.selectedProcess.type.statistics[index].name]?.hasData ?? false;
-        return GestureDetector(
-          onTap: () {
+    final statistics = widget.selectedProcess.type.statistics;
+    final filteredStatistics = statistics.asMap().entries.where((entry) {
+      if (searchQuery.isEmpty) {
+        return true;
+      }
+
+      return entry.value.name.toLowerCase().contains(searchQuery.toLowerCase());
+    }).toList();
+
+    return Column(
+      children: [
+        SearchBar(
+          controller: _searchController,
+          hintText: 'Search statistics',
+          onChanged: (value) {
             setState(() {
-              selectedIndex = index;
+              searchQuery = value;
             });
-            widget.onStatisticSelected?.call(index);
           },
-          child: Container(
-            height: 25,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            color: isSelected ? Color(0xFFDCF5FF) : Colors.transparent,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              widget.selectedProcess.type.statistics[index].name,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: !hasData ? .normal : .bold,
-              ),
-            ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: filteredStatistics.length,
+            itemBuilder: (context, index) {
+              final statisticEntry = filteredStatistics[index];
+              final statisticIndex = statisticEntry.key;
+              final statistic = statisticEntry.value;
+              final isSelected = selectedIndex == statisticIndex;
+              final hasData = widget.selectedProcess.statisticData[statistic.name]?.hasData ?? false;
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    selectedIndex = statisticIndex;
+                  });
+                  widget.onStatisticSelected?.call(statisticIndex);
+                },
+                child: Container(
+                  height: 25,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  color: isSelected ? const Color(0xFFDCF5FF) : Colors.transparent,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    statistic.name,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
