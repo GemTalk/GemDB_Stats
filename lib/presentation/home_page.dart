@@ -28,7 +28,7 @@ class _HomePageState extends State<HomePage> {
             child: multiSplitViewTheme(
               child: MultiSplitView(
                 axis: .vertical,
-                initialAreas: [processTableArea(), statisticsArea()],
+                initialAreas: [tablesArea(), statsChartArea()],
               ),
             ),
           ),
@@ -37,8 +37,23 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Area tablesArea() {
+    return Area(
+      builder: (context, area) => multiSplitViewTheme(
+        child: MultiSplitView(
+          axis: .horizontal,
+          initialAreas: [
+            processTableArea(),
+            statsArea(),
+          ],
+        ),
+      ),
+    );
+  }
+
   Area processTableArea() {
     return Area(
+      flex: 2,
       builder: (context, area) => ProcessTable(
         onProcessSelected: (process) {
           setState(() {
@@ -50,12 +65,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Area statisticsArea() {
+  Area statsArea() {
     return Area(
       builder: (context, area) => multiSplitViewTheme(
         child: MultiSplitView(
-          axis: .horizontal,
-          initialAreas: [statsTableArea(), statsInfoArea()],
+          axis: .vertical,
+          initialAreas: [
+            statsTableArea(),
+            statsDescriptionArea(),
+          ],
         ),
       ),
     );
@@ -63,6 +81,7 @@ class _HomePageState extends State<HomePage> {
 
   Area statsTableArea() {
     return Area(
+      flex: 3,
       builder: (context, area) => ColoredBox(
         color: Colors.white,
         child: selectedProcess != null
@@ -88,18 +107,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Area statsInfoArea() {
-    return Area(
-      flex: 2,
-      builder: (context, area) => multiSplitViewTheme(
-        child: MultiSplitView(
-          axis: .vertical,
-          initialAreas: [statsDescriptionArea(), statsChartArea()],
-        ),
-      ),
-    );
-  }
-
   Area statsDescriptionArea() {
     return Area(
       builder: (context, area) => selectedStatistic != null
@@ -115,7 +122,6 @@ class _HomePageState extends State<HomePage> {
 
   Area statsChartArea() {
     return Area(
-      flex: 3,
       builder: (context, area) {
         if (selectedProcess == null || selectedStatistic == null) {
           return const SizedBox.shrink();
