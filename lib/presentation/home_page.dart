@@ -53,7 +53,7 @@ class _HomePageState extends State<HomePage> {
 
   Area processTableArea() {
     return Area(
-      flex: 2,
+      size: 950,
       builder: (context, area) => ProcessTable(
         onProcessSelected: (process) {
           setState(() {
