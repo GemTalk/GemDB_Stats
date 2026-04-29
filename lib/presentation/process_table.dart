@@ -14,6 +14,8 @@ class ProcessTable extends StatefulWidget {
 }
 
 class _ProcessTableState extends State<ProcessTable> {
+  PlutoGridStateManager? _stateManager;
+  String? selectedProcessSelectionKey;
   final List<PlutoRow> rows = DataManager().allProcesses.map((process) {
     return PlutoRow(
       cells: {
@@ -99,6 +101,11 @@ class _ProcessTableState extends State<ProcessTable> {
   @override
   Widget build(BuildContext context) {
     return PlutoGrid(
+      rowColorCallback: (rowColorContext) {
+        return _rowSelectionKey(rowColorContext.row) == selectedProcessSelectionKey
+            ? const Color(0xFFDCF5FF)
+            : Colors.white;
+      },
       columns: columns,
       rows: rows,
       mode: PlutoGridMode.selectWithOneTap,
@@ -121,6 +128,7 @@ class _ProcessTableState extends State<ProcessTable> {
         enableMoveHorizontalInEditing: false,
       ),
       onLoaded: (PlutoGridOnLoadedEvent event) {
+        _stateManager = event.stateManager;
         event.stateManager.setSelectingMode(PlutoGridSelectingMode.row);
         event.stateManager.setEditing(false);
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -130,6 +138,13 @@ class _ProcessTableState extends State<ProcessTable> {
       },
       onSelected: (PlutoGridOnSelectedEvent event) {
         if (event.row != null) {
+          setState(() {
+            selectedProcessSelectionKey = _rowSelectionKey(event.row!);
+          });
+
+          _stateManager?.clearCurrentCell();
+          _stateManager?.clearCurrentSelecting();
+
           final processName = event.row!.cells['name']!.value as String;
           final processId = int.parse(event.row!.cells['processId']!.value as String);
           final sessionId = event.row!.cells['sessionId']!.value as String;
@@ -142,10 +157,16 @@ class _ProcessTableState extends State<ProcessTable> {
             sessionId: sessionId,
           );
           widget.onProcessSelected?.call(process);
-        } else {
-          widget.onProcessSelected?.call(null);
         }
       },
     );
+  }
+
+  String _rowSelectionKey(PlutoRow row) {
+    final processId = row.cells['processId']!.value as String;
+    final sessionId = row.cells['sessionId']!.value as String;
+    final typeId = row.cells['typeId']!.value as int;
+    final processName = row.cells['name']!.value as String;
+    return '$typeId|$sessionId|$processId|$processName';
   }
 }

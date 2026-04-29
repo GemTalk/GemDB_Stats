@@ -50,15 +50,9 @@ class _SearchBarState extends State<SearchBar> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
       height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.black.withValues(alpha: .08)),
-        ),
-      ),
       child: Center(
         child: MouseRegion(
           cursor: SystemMouseCursors.text,
