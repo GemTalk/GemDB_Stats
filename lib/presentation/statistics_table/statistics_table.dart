@@ -31,6 +31,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
   int? _hoveredIndex;
   String searchQuery = '';
   bool hideStatisticsWithNoData = false;
+  bool _hideStatsSummary = false;
   bool _multiChartMode = false;
   Set<int> _multiChartChecked = {};
 
@@ -119,7 +120,11 @@ class _StatisticsTableState extends State<StatisticsTable> {
               final statisticIndex = statisticEntry.key;
               final statistic = statisticEntry.value;
               final isSelected = selectedIndex == statisticIndex;
-              final hasData = widget.selectedProcess.statisticData[statistic.name]?.hasData ?? false;
+              final ts = widget.selectedProcess.statisticData[statistic.name];
+              final hasData = ts?.hasData ?? false;
+              final minVal = ts?.min;
+              final maxVal = ts?.max;
+              final avgVal = ts?.average;
               final isChecked = _multiChartChecked.contains(statisticIndex);
               final seriesColor = _multiChartMode ? _getSeriesColor(statisticIndex) : null;
 
@@ -152,8 +157,22 @@ class _StatisticsTableState extends State<StatisticsTable> {
                         : Colors.transparent,
                     alignment: Alignment.centerLeft,
                     child: _multiChartMode
-                        ? multiChartModeRow(isChecked, seriesColor, statistic, hasData)
-                        : singleChartModeRow(statistic, hasData),
+                        ? multiChartModeRow(
+                            isChecked,
+                            seriesColor,
+                            statistic,
+                            hasData,
+                            _hideStatsSummary ? null : minVal,
+                            _hideStatsSummary ? null : maxVal,
+                            _hideStatsSummary ? null : avgVal,
+                          )
+                        : singleChartModeRow(
+                            statistic,
+                            hasData,
+                            _hideStatsSummary ? null : minVal,
+                            _hideStatsSummary ? null : maxVal,
+                            _hideStatsSummary ? null : avgVal,
+                          ),
                   ),
                 ),
               );
@@ -164,19 +183,51 @@ class _StatisticsTableState extends State<StatisticsTable> {
     );
   }
 
-  Widget singleChartModeRow(Statistic statistic, bool hasData) {
-    return Text(
-      statistic.name,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
-      ),
+  String _formatStat(num value) {
+    if (value > 99000) {
+      return '${value ~/ 1000}k';
+    }
+    if (value is double) {
+      return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
+    }
+    return value.toString();
+  }
+
+  Widget singleChartModeRow(Statistic statistic, bool hasData, int? minVal, int? maxVal, double? avgVal) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            statistic.name,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ),
+        if (hasData && minVal != null && maxVal != null && avgVal != null) ...[
+          const SizedBox(width: 8),
+          Text(
+            'min: ${_formatStat(minVal)}  max: ${_formatStat(maxVal)}  avg: ${_formatStat(avgVal)}',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+          ),
+        ],
+      ],
     );
   }
 
-  Widget multiChartModeRow(bool isChecked, Color? seriesColor, Statistic statistic, bool hasData) {
+  Widget multiChartModeRow(
+    bool isChecked,
+    Color? seriesColor,
+    Statistic statistic,
+    bool hasData,
+    int? minVal,
+    int? maxVal,
+    double? avgVal,
+  ) {
     return Row(
-      spacing: 6,
       children: [
         IgnorePointer(
           child: ShadCheckbox(
@@ -195,14 +246,26 @@ class _StatisticsTableState extends State<StatisticsTable> {
             ),
           ),
         ),
-        Text(
-          statistic.name,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
-            color: seriesColor,
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            statistic.name,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
+              color: seriesColor,
+            ),
           ),
         ),
+        if (hasData && minVal != null && maxVal != null && avgVal != null) ...[
+          const SizedBox(width: 8),
+          Text(
+            'min: ${_formatStat(minVal)}  max: ${_formatStat(maxVal)}  avg: ${_formatStat(avgVal)}',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+          ),
+        ],
       ],
     );
   }
@@ -271,6 +334,25 @@ class _StatisticsTableState extends State<StatisticsTable> {
                   widget.onStatisticSelected?.call(null);
                 }
               }
+            });
+          },
+        ),
+        MacosPulldownMenuItem(
+          label: 'Hide statistics summary',
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 14,
+                child: _hideStatsSummary ? const Icon(Icons.check, size: 14) : null,
+              ),
+              const SizedBox(width: 8),
+              const Text('Hide statistics summary'),
+            ],
+          ),
+          onTap: () {
+            setState(() {
+              _hideStatsSummary = !_hideStatsSummary;
             });
           },
         ),
