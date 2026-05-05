@@ -60,14 +60,18 @@ class _StatisticsTableState extends State<StatisticsTable> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            spacing: 8,
-            children: [
-              searchBar(),
-              threeDotMenu(statistics),
-            ],
+          child: Center(
+            child: Row(
+              spacing: 8,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                searchBar(),
+                threeDotMenu(statistics),
+              ],
+            ),
           ),
         ),
+        Divider(height: 1),
         Expanded(
           child: ListView.builder(
             itemCount: filteredStatistics.length,
@@ -106,8 +110,9 @@ class _StatisticsTableState extends State<StatisticsTable> {
     );
   }
 
-  Expanded searchBar() {
-    return Expanded(
+  Widget searchBar() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 500),
       child: SearchBar(
         controller: _searchController,
         hintText: 'Search statistics',

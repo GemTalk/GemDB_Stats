@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
 final theme = ThemeData(
-  colorScheme: const ColorScheme(
+  colorScheme: ColorScheme(
     brightness: Brightness.light,
     primary: Colors.black,
     onPrimary: Colors.white,
@@ -12,6 +12,7 @@ final theme = ThemeData(
     onError: Colors.white,
     surface: Color(0xFFF7F7F7),
     onSurface: Colors.black,
+    outlineVariant: Colors.black.withValues(alpha: .08),
   ),
   scaffoldBackgroundColor: const Color(0xFFF7F7F7),
 );

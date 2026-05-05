@@ -51,7 +51,6 @@ class _SearchBarState extends State<SearchBar> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: double.infinity,
       height: 36,
       child: Center(
         child: MouseRegion(
@@ -59,7 +58,6 @@ class _SearchBarState extends State<SearchBar> {
           onEnter: (_) => setState(() => _isHovering = true),
           onExit: (_) => setState(() => _isHovering = false),
           child: Container(
-            width: 500,
             height: 26,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
