@@ -16,6 +16,7 @@ class ProcessTable extends StatefulWidget {
 class _ProcessTableState extends State<ProcessTable> {
   PlutoGridStateManager? _stateManager;
   String? selectedProcessSelectionKey;
+  int? _hoveredRowIndex;
   final List<PlutoRow> rows = DataManager().allProcesses.map((process) {
     return PlutoRow(
       cells: {
@@ -100,65 +101,87 @@ class _ProcessTableState extends State<ProcessTable> {
 
   @override
   Widget build(BuildContext context) {
-    return PlutoGrid(
-      rowColorCallback: (rowColorContext) {
-        return _rowSelectionKey(rowColorContext.row) == selectedProcessSelectionKey
-            ? const Color(0xFFDCF5FF)
-            : Colors.white;
-      },
-      columns: columns,
-      rows: rows,
-      mode: PlutoGridMode.selectWithOneTap,
-      configuration: PlutoGridConfiguration(
-        style: PlutoGridStyleConfig(
-          rowHeight: 25,
-          columnHeight: 30,
-          cellTextStyle: TextStyle(fontSize: 13),
-          columnTextStyle: TextStyle(fontSize: 13, fontWeight: .bold),
-          enableCellBorderHorizontal: false,
-          enableCellBorderVertical: false,
-          activatedBorderColor: Colors.transparent,
-          gridBorderColor: Colors.transparent,
-          iconSize: 0,
-        ),
-        columnSize: PlutoGridColumnSizeConfig(resizeMode: PlutoResizeMode.normal),
-        enterKeyAction: PlutoGridEnterKeyAction.toggleEditing,
-        tabKeyAction: PlutoGridTabKeyAction.normal,
-        enableMoveDownAfterSelecting: true,
-        enableMoveHorizontalInEditing: false,
-      ),
-      onLoaded: (PlutoGridOnLoadedEvent event) {
-        _stateManager = event.stateManager;
-        event.stateManager.setSelectingMode(PlutoGridSelectingMode.row);
-        event.stateManager.setEditing(false);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          event.stateManager.clearCurrentCell();
-          event.stateManager.clearCurrentSelecting();
-        });
-      },
-      onSelected: (PlutoGridOnSelectedEvent event) {
-        if (event.row != null) {
-          setState(() {
-            selectedProcessSelectionKey = _rowSelectionKey(event.row!);
-          });
-
-          _stateManager?.clearCurrentCell();
-          _stateManager?.clearCurrentSelecting();
-
-          final processName = event.row!.cells['name']!.value as String;
-          final processId = int.parse(event.row!.cells['processId']!.value as String);
-          final sessionId = event.row!.cells['sessionId']!.value as String;
-          final statTypeId = event.row!.cells['typeId']!.value as int;
-
-          final process = DataManager().findProcess(
-            statTypeId: statTypeId,
-            processName: processName,
-            processId: processId,
-            sessionId: sessionId,
-          );
-          widget.onProcessSelected?.call(process);
+    return MouseRegion(
+      cursor: (_hoveredRowIndex != null && _hoveredRowIndex! < rows.length)
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      onHover: (event) {
+        final scrollOffset = _stateManager?.scroll.vertical?.offset ?? 0;
+        final adjustedY = event.localPosition.dy - 30 + scrollOffset;
+        final rowIdx = adjustedY < 0 ? null : (adjustedY / 25).floor();
+        if (rowIdx != _hoveredRowIndex) {
+          setState(() => _hoveredRowIndex = rowIdx);
         }
       },
+      onExit: (_) {
+        if (_hoveredRowIndex != null) {
+          setState(() => _hoveredRowIndex = null);
+        }
+      },
+      child: PlutoGrid(
+        rowColorCallback: (rowColorContext) {
+          if (_rowSelectionKey(rowColorContext.row) == selectedProcessSelectionKey) {
+            return const Color(0xFFDCF5FF);
+          }
+          if (rowColorContext.rowIdx == _hoveredRowIndex) {
+            return Colors.grey.shade100;
+          }
+          return Colors.white;
+        },
+        columns: columns,
+        rows: rows,
+        mode: PlutoGridMode.selectWithOneTap,
+        configuration: PlutoGridConfiguration(
+          style: PlutoGridStyleConfig(
+            rowHeight: 25,
+            columnHeight: 30,
+            cellTextStyle: TextStyle(fontSize: 13),
+            columnTextStyle: TextStyle(fontSize: 13, fontWeight: .bold),
+            enableCellBorderHorizontal: false,
+            enableCellBorderVertical: false,
+            activatedBorderColor: Colors.transparent,
+            gridBorderColor: Colors.transparent,
+            iconSize: 0,
+          ),
+          columnSize: PlutoGridColumnSizeConfig(resizeMode: PlutoResizeMode.normal),
+          enterKeyAction: PlutoGridEnterKeyAction.toggleEditing,
+          tabKeyAction: PlutoGridTabKeyAction.normal,
+          enableMoveDownAfterSelecting: true,
+          enableMoveHorizontalInEditing: false,
+        ),
+        onLoaded: (PlutoGridOnLoadedEvent event) {
+          _stateManager = event.stateManager;
+          event.stateManager.setSelectingMode(PlutoGridSelectingMode.row);
+          event.stateManager.setEditing(false);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            event.stateManager.clearCurrentCell();
+            event.stateManager.clearCurrentSelecting();
+          });
+        },
+        onSelected: (PlutoGridOnSelectedEvent event) {
+          if (event.row != null) {
+            setState(() {
+              selectedProcessSelectionKey = _rowSelectionKey(event.row!);
+            });
+
+            _stateManager?.clearCurrentCell();
+            _stateManager?.clearCurrentSelecting();
+
+            final processName = event.row!.cells['name']!.value as String;
+            final processId = int.parse(event.row!.cells['processId']!.value as String);
+            final sessionId = event.row!.cells['sessionId']!.value as String;
+            final statTypeId = event.row!.cells['typeId']!.value as int;
+
+            final process = DataManager().findProcess(
+              statTypeId: statTypeId,
+              processName: processName,
+              processId: processId,
+              sessionId: sessionId,
+            );
+            widget.onProcessSelected?.call(process);
+          }
+        },
+      ),
     );
   }
 

@@ -28,6 +28,7 @@ class StatisticsTable extends StatefulWidget {
 class _StatisticsTableState extends State<StatisticsTable> {
   final TextEditingController _searchController = TextEditingController();
   int? selectedIndex;
+  int? _hoveredIndex;
   String searchQuery = '';
   bool hideStatisticsWithNoData = false;
   bool _multiChartMode = false;
@@ -58,6 +59,27 @@ class _StatisticsTableState extends State<StatisticsTable> {
     }
   }
 
+  /// Returns the chart color for a checked statistic, or null if unchecked/no data.
+  /// Color index matches Cristalyse's assignment order (position among valid series).
+  Color? _getSeriesColor(int statisticIndex) {
+    if (!_multiChartChecked.contains(statisticIndex)) {
+      return null;
+    }
+    final checkedWithData = _multiChartChecked.where((i) {
+      if (i >= widget.selectedProcess.type.statistics.length) {
+        return false;
+      }
+      final stat = widget.selectedProcess.type.statistics[i];
+      final ts = widget.selectedProcess.statisticData[stat.name];
+      return ts != null && ts.points.length >= 2;
+    }).toList();
+    final colorIndex = checkedWithData.indexOf(statisticIndex);
+    if (colorIndex < 0) {
+      return null;
+    }
+    return kMultiChartPalette[colorIndex % kMultiChartPalette.length];
+  }
+
   @override
   Widget build(BuildContext context) {
     final statistics = widget.selectedProcess.type.statistics;
@@ -81,8 +103,8 @@ class _StatisticsTableState extends State<StatisticsTable> {
           child: Row(
             mainAxisAlignment: .center,
             spacing: 8,
-            children: [ 
-              _multiChartButton(),
+            children: [
+              multiChartButton(),
               Flexible(child: searchBar()),
               threeDotMenu(statistics),
             ],
@@ -101,64 +123,38 @@ class _StatisticsTableState extends State<StatisticsTable> {
               final isChecked = _multiChartChecked.contains(statisticIndex);
               final seriesColor = _multiChartMode ? _getSeriesColor(statisticIndex) : null;
 
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    selectedIndex = statisticIndex;
-                    if (_multiChartMode) {
-                      if (isChecked) {
-                        _multiChartChecked.remove(statisticIndex);
-                      } else {
-                        _multiChartChecked.add(statisticIndex);
+              return MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onEnter: (_) => setState(() => _hoveredIndex = statisticIndex),
+                onExit: (_) => setState(() => _hoveredIndex = null),
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      selectedIndex = statisticIndex;
+                      if (_multiChartMode) {
+                        if (isChecked) {
+                          _multiChartChecked.remove(statisticIndex);
+                        } else {
+                          _multiChartChecked.add(statisticIndex);
+                        }
+                        widget.onMultiChartSelectionChanged?.call(Set.from(_multiChartChecked));
                       }
-                      widget.onMultiChartSelectionChanged?.call(Set.from(_multiChartChecked));
-                    }
-                  });
-                  widget.onStatisticSelected?.call(statisticIndex);
-                },
-                child: Container(
-                  height: 25,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  color: isSelected ? const Color(0xFFDCF5FF) : Colors.transparent,
-                  alignment: Alignment.centerLeft,
-                  child: _multiChartMode
-                      ? Row(
-                          children: [
-                            IgnorePointer(
-                              child: ShadCheckbox(
-                                value: isChecked,
-                                onChanged: (_) {},
-                                color: seriesColor,
-                                size: 14,
-                                uncheckedColor: Colors.white,
-                                checkboxPadding: EdgeInsets.zero,
-                                decoration: ShadDecoration(
-                                  border: ShadBorder.all(
-                                    color: isChecked ? (seriesColor ?? Colors.grey.shade600) : Colors.grey.shade400,
-                                    radius: BorderRadius.circular(4),
-                                    width: 1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              statistic.name,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
-                                color: seriesColor,
-                              ),
-                            ),
-                          ],
-                        )
-                      : Text(
-                          statistic.name,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
+                    });
+                    widget.onStatisticSelected?.call(statisticIndex);
+                  },
+                  child: Container(
+                    height: 25,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    color: isSelected
+                        ? const Color(0xFFDCF5FF)
+                        : _hoveredIndex == statisticIndex
+                        ? Colors.grey.shade100
+                        : Colors.transparent,
+                    alignment: Alignment.centerLeft,
+                    child: _multiChartMode
+                        ? multiChartModeRow(isChecked, seriesColor, statistic, hasData)
+                        : singleChartModeRow(statistic, hasData),
+                  ),
                 ),
               );
             },
@@ -168,28 +164,65 @@ class _StatisticsTableState extends State<StatisticsTable> {
     );
   }
 
-  // Returns the chart color for a checked statistic, or null if unchecked/no data.
-  // Color index matches Cristalyse's assignment order (position among valid series).
-  Color? _getSeriesColor(int statisticIndex) {
-    if (!_multiChartChecked.contains(statisticIndex)) {
-      return null;
-    }
-    final checkedWithData = _multiChartChecked.where((i) {
-      if (i >= widget.selectedProcess.type.statistics.length) {
-        return false;
-      }
-      final stat = widget.selectedProcess.type.statistics[i];
-      final ts = widget.selectedProcess.statisticData[stat.name];
-      return ts != null && ts.points.length >= 2;
-    }).toList();
-    final colorIndex = checkedWithData.indexOf(statisticIndex);
-    if (colorIndex < 0) {
-      return null;
-    }
-    return kMultiChartPalette[colorIndex % kMultiChartPalette.length];
+  Widget singleChartModeRow(Statistic statistic, bool hasData) {
+    return Text(
+      statistic.name,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
+      ),
+    );
   }
 
-  Widget _multiChartButton() {
+  Widget multiChartModeRow(bool isChecked, Color? seriesColor, Statistic statistic, bool hasData) {
+    return Row(
+      spacing: 6,
+      children: [
+        IgnorePointer(
+          child: ShadCheckbox(
+            value: isChecked,
+            onChanged: (_) {},
+            color: seriesColor,
+            size: 14,
+            uncheckedColor: Colors.white,
+            checkboxPadding: EdgeInsets.zero,
+            decoration: ShadDecoration(
+              border: ShadBorder.all(
+                color: isChecked ? (seriesColor ?? Colors.grey.shade600) : Colors.grey.shade400,
+                radius: BorderRadius.circular(4),
+                width: 1,
+              ),
+            ),
+          ),
+        ),
+        Text(
+          statistic.name,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
+            color: seriesColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget searchBar() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 500),
+      child: SearchBar(
+        controller: _searchController,
+        hintText: 'Search statistics',
+        onChanged: (value) {
+          setState(() {
+            searchQuery = value;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget multiChartButton() {
     return ToolIconButton(
       icon: FontAwesomeIcons.chartLine,
       tooltip: _multiChartMode ? 'Stop MultiChart' : 'Start MultiChart',
@@ -209,22 +242,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
     );
   }
 
-  Widget searchBar() {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 500),
-      child: SearchBar(
-        controller: _searchController,
-        hintText: 'Search statistics',
-        onChanged: (value) {
-          setState(() {
-            searchQuery = value;
-          });
-        },
-      ),
-    );
-  }
-
-  CustomPulldownButton threeDotMenu(List<Statistic> statistics) {
+  Widget threeDotMenu(List<Statistic> statistics) {
     return CustomPulldownButton(
       icon: Icons.more_horiz,
       items: [
