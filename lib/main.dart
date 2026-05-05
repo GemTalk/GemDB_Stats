@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:vsd/domain/data_manager.dart';
 import 'package:vsd/presentation/home_page.dart';
 import 'package:vsd/theme.dart';
@@ -16,10 +17,13 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: theme,
-      home: HomePage(),
+    return ShadTheme(
+      data: ShadThemeData(),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: theme,
+        home: HomePage(),
+      ),
     );
   }
 }

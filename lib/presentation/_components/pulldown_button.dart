@@ -866,7 +866,7 @@ class _CustomPulldownButtonState extends State<CustomPulldownButton> with Widget
   @override
   Widget build(BuildContext context) {
     final buttonHeight = _hasIcon ? 28.0 : 20.0;
-    final borderRadius = _hasIcon ? const BorderRadius.all(Radius.circular(7.0)) : _kBorderRadius;
+    final borderRadius = _hasIcon ? const BorderRadius.all(Radius.circular(8)) : _kBorderRadius;
     final buttonStyles = _getButtonStyles(
       _pullDownButtonState,
       _enabled,
@@ -895,6 +895,7 @@ class _CustomPulldownButtonState extends State<CustomPulldownButton> with Widget
             ),
       padding: const EdgeInsets.only(left: 4.0, right: 4.0),
       height: buttonHeight,
+      width: buttonHeight,
       child: _hasIcon
           ? MacosIcon(widget.icon!, color: buttonStyles.textColor, size: 16)
           : _enabled

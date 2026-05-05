@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart' hide SearchBar;
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/domain/models/statistic.dart';
-import 'package:vsd/presentation/components/pulldown_button.dart';
-import 'package:vsd/presentation/components/search_bar.dart';
+import 'package:vsd/presentation/_components/pulldown_button.dart';
+import 'package:vsd/presentation/_components/search_bar.dart';
+import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
+import 'package:vsd/presentation/statistics_table/tool_icon_button.dart';
 
 class StatisticsTable extends StatefulWidget {
   const StatisticsTable({
     required this.selectedProcess,
     super.key,
     this.onStatisticSelected,
+    this.onMultiChartSelectionChanged,
   });
 
   final Process selectedProcess;
   final void Function(int?)? onStatisticSelected;
+  // null = MultiChart mode off; Set<int> = MultiChart mode on with checked indices
+  final void Function(Set<int>?)? onMultiChartSelectionChanged;
 
   @override
   State<StatisticsTable> createState() => _StatisticsTableState();
@@ -23,6 +30,8 @@ class _StatisticsTableState extends State<StatisticsTable> {
   int? selectedIndex;
   String searchQuery = '';
   bool hideStatisticsWithNoData = false;
+  bool _multiChartMode = false;
+  Set<int> _multiChartChecked = {};
 
   @override
   void dispose() {
@@ -37,6 +46,11 @@ class _StatisticsTableState extends State<StatisticsTable> {
       selectedIndex = null;
       searchQuery = '';
       _searchController.clear();
+      if (_multiChartMode) {
+        _multiChartMode = false;
+        _multiChartChecked = {};
+        widget.onMultiChartSelectionChanged?.call(null);
+      }
     }
   }
 
@@ -65,6 +79,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
               spacing: 8,
               mainAxisSize: MainAxisSize.min,
               children: [
+                _multiChartButton(),
                 searchBar(),
                 threeDotMenu(statistics),
               ],
@@ -81,11 +96,21 @@ class _StatisticsTableState extends State<StatisticsTable> {
               final statistic = statisticEntry.value;
               final isSelected = selectedIndex == statisticIndex;
               final hasData = widget.selectedProcess.statisticData[statistic.name]?.hasData ?? false;
+              final isChecked = _multiChartChecked.contains(statisticIndex);
+              final seriesColor = _multiChartMode ? _getSeriesColor(statisticIndex) : null;
 
               return GestureDetector(
                 onTap: () {
                   setState(() {
                     selectedIndex = statisticIndex;
+                    if (_multiChartMode) {
+                      if (isChecked) {
+                        _multiChartChecked.remove(statisticIndex);
+                      } else {
+                        _multiChartChecked.add(statisticIndex);
+                      }
+                      widget.onMultiChartSelectionChanged?.call(Set.from(_multiChartChecked));
+                    }
                   });
                   widget.onStatisticSelected?.call(statisticIndex);
                 },
@@ -94,19 +119,91 @@ class _StatisticsTableState extends State<StatisticsTable> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   color: isSelected ? const Color(0xFFDCF5FF) : Colors.transparent,
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    statistic.name,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  ),
+                  child: _multiChartMode
+                      ? Row(
+                          children: [
+                            IgnorePointer(
+                              child: ShadCheckbox(
+                                value: isChecked,
+                                onChanged: (_) {},
+                                color: seriesColor,
+                                size: 14,
+                                uncheckedColor: Colors.white,
+                                checkboxPadding: EdgeInsets.zero,
+                                decoration: ShadDecoration(
+                                  border: ShadBorder.all(
+                                    color: isChecked ? (seriesColor ?? Colors.grey.shade600) : Colors.grey.shade400,
+                                    radius: BorderRadius.circular(4),
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              statistic.name,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
+                                color: seriesColor,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          statistic.name,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
                 ),
               );
             },
           ),
         ),
       ],
+    );
+  }
+
+  // Returns the chart color for a checked statistic, or null if unchecked/no data.
+  // Color index matches Cristalyse's assignment order (position among valid series).
+  Color? _getSeriesColor(int statisticIndex) {
+    if (!_multiChartChecked.contains(statisticIndex)) {
+      return null;
+    }
+    final checkedWithData = _multiChartChecked.where((i) {
+      if (i >= widget.selectedProcess.type.statistics.length) {
+        return false;
+      }
+      final stat = widget.selectedProcess.type.statistics[i];
+      final ts = widget.selectedProcess.statisticData[stat.name];
+      return ts != null && ts.points.length >= 2;
+    }).toList();
+    final colorIndex = checkedWithData.indexOf(statisticIndex);
+    if (colorIndex < 0) {
+      return null;
+    }
+    return kMultiChartPalette[colorIndex % kMultiChartPalette.length];
+  }
+
+  Widget _multiChartButton() {
+    return ToolIconButton(
+      icon: FontAwesomeIcons.chartLine,
+      tooltip: _multiChartMode ? 'Stop MultiChart' : 'Start MultiChart',
+      isActive: _multiChartMode,
+      onTap: () {
+        setState(() {
+          _multiChartMode = !_multiChartMode;
+          if (_multiChartMode) {
+            _multiChartChecked = selectedIndex != null ? {selectedIndex!} : {};
+            widget.onMultiChartSelectionChanged?.call(Set.from(_multiChartChecked));
+          } else {
+            _multiChartChecked = {};
+            widget.onMultiChartSelectionChanged?.call(null);
+          }
+        });
+      },
     );
   }
 

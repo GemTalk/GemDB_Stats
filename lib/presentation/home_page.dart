@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:vsd/domain/models/process.dart';
+import 'package:vsd/domain/models/time_series.dart';
+import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
+import 'package:vsd/presentation/chart/statistic_line_chart.dart';
 import 'package:vsd/presentation/file_bar.dart';
 import 'package:vsd/presentation/process_table.dart';
-import 'package:vsd/presentation/statistic_line_chart.dart';
-import 'package:vsd/presentation/statistics_table.dart';
+import 'package:vsd/presentation/statistics_table/statistics_table.dart';
 import 'package:vsd/theme.dart';
 
 class HomePage extends StatefulWidget {
@@ -17,6 +19,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   Process? selectedProcess;
   int? selectedStatistic;
+  Set<int>? _multiChartSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +62,7 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             selectedProcess = process;
             selectedStatistic = null;
+            _multiChartSelection = null;
           });
         },
       ),
@@ -92,6 +96,11 @@ class _HomePageState extends State<HomePage> {
                     selectedStatistic = statistic;
                   });
                 },
+                onMultiChartSelectionChanged: (selection) {
+                  setState(() {
+                    _multiChartSelection = selection;
+                  });
+                },
               )
             : _buildEmptyState(),
       ),
@@ -123,6 +132,26 @@ class _HomePageState extends State<HomePage> {
   Area statsChartArea() {
     return Area(
       builder: (context, area) {
+        if (_multiChartSelection != null) {
+          if (_multiChartSelection!.isEmpty) {
+            return const Align(
+              alignment: Alignment.center,
+              child: Text(
+                'Select statistics to compare',
+                style: TextStyle(fontSize: 12, color: Colors.black45),
+              ),
+            );
+          }
+
+          final chartSeries = _multiChartSelection!.where((i) => i < selectedProcess!.type.statistics.length).map((i) {
+            final stat = selectedProcess!.type.statistics[i];
+            final ts = selectedProcess!.statisticData[stat.name];
+            return (name: stat.name, points: ts?.points ?? <DataPoint>[]);
+          }).toList();
+
+          return MultiStatisticLineChart(series: chartSeries);
+        }
+
         if (selectedProcess == null || selectedStatistic == null) {
           return const SizedBox.shrink();
         }
