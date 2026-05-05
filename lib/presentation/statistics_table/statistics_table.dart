@@ -310,16 +310,16 @@ class _StatisticsTableState extends State<StatisticsTable> {
       icon: Icons.more_horiz,
       items: [
         MacosPulldownMenuItem(
-          label: 'Hide statistics with no data',
+          label: 'Show statistics with no data',
           title: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
                 width: 14,
-                child: hideStatisticsWithNoData ? const Icon(Icons.check, size: 14) : null,
+                child: !hideStatisticsWithNoData ? const Icon(Icons.check, size: 14) : null,
               ),
               const SizedBox(width: 8),
-              const Text('Hide statistics with no data'),
+              const Text('Show statistics with no data'),
             ],
           ),
           onTap: () {
@@ -338,16 +338,16 @@ class _StatisticsTableState extends State<StatisticsTable> {
           },
         ),
         MacosPulldownMenuItem(
-          label: 'Hide statistics summary',
+          label: 'Show statistics summary',
           title: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
                 width: 14,
-                child: _hideStatsSummary ? const Icon(Icons.check, size: 14) : null,
+                child: !_hideStatsSummary ? const Icon(Icons.check, size: 14) : null,
               ),
               const SizedBox(width: 8),
-              const Text('Hide statistics summary'),
+              const Text('Show statistics summary'),
             ],
           ),
           onTap: () {

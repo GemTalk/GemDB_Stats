@@ -164,6 +164,7 @@ class _HomePageState extends State<HomePage> {
         return hasData && series != null
             ? StatisticLineChart(
                 points: series.points,
+                statisticName: statistic.name,
               )
             : const Align(
                 alignment: Alignment.center,
