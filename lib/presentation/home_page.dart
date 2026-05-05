@@ -56,7 +56,6 @@ class _HomePageState extends State<HomePage> {
 
   Area processTableArea() {
     return Area(
-      size: 950,
       builder: (context, area) => ProcessTable(
         onProcessSelected: (process) {
           setState(() {
@@ -71,6 +70,8 @@ class _HomePageState extends State<HomePage> {
 
   Area statsArea() {
     return Area(
+      size: 500,
+      min: 350,
       builder: (context, area) => multiSplitViewTheme(
         child: MultiSplitView(
           axis: .vertical,

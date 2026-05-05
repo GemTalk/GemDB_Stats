@@ -3,8 +3,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/domain/models/statistic.dart';
-import 'package:vsd/presentation/_components/pulldown_button.dart';
-import 'package:vsd/presentation/_components/search_bar.dart';
+import 'package:vsd/presentation/_reusable_components/pulldown_button.dart';
+import 'package:vsd/presentation/_reusable_components/search_bar.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
 import 'package:vsd/presentation/statistics_table/tool_icon_button.dart';
 
@@ -49,7 +49,11 @@ class _StatisticsTableState extends State<StatisticsTable> {
       if (_multiChartMode) {
         _multiChartMode = false;
         _multiChartChecked = {};
-        widget.onMultiChartSelectionChanged?.call(null);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            widget.onMultiChartSelectionChanged?.call(null);
+          }
+        });
       }
     }
   }
@@ -74,16 +78,14 @@ class _StatisticsTableState extends State<StatisticsTable> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Center(
-            child: Row(
-              spacing: 8,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _multiChartButton(),
-                searchBar(),
-                threeDotMenu(statistics),
-              ],
-            ),
+          child: Row(
+            mainAxisAlignment: .center,
+            spacing: 8,
+            children: [ 
+              _multiChartButton(),
+              Flexible(child: searchBar()),
+              threeDotMenu(statistics),
+            ],
           ),
         ),
         Divider(height: 1),
