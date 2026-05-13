@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const _kLastDirectoryKey = 'last_file_directory';
 
 class FileBar extends StatefulWidget {
   const FileBar({super.key, this.onFileSelected});
@@ -15,12 +20,20 @@ class _FileBarState extends State<FileBar> {
   bool _isHovering = false;
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.name.isNotEmpty) {
+    final prefs = await SharedPreferences.getInstance();
+    final lastDir = prefs.getString(_kLastDirectoryKey);
+
+    final result = await FilePicker.platform.pickFiles(
+      initialDirectory: lastDir,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      final path = result.files.single.path!;
+      await prefs.setString(_kLastDirectoryKey, File(path).parent.path);
       setState(() {
         _fileName = result.files.single.name;
       });
-      widget.onFileSelected?.call(result.files.single.path!);
+      widget.onFileSelected?.call(path);
     }
   }
 

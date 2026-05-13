@@ -1,5 +1,7 @@
+import 'dart:io';
+import 'dart:isolate';
+
 import 'package:flutter/services.dart';
-import 'package:vsd/data/test.dart';
 import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/domain/models/stat_type.dart';
 import 'package:vsd/domain/models/statistic.dart';
@@ -22,10 +24,25 @@ class DataManager {
     return processes.values.expand((list) => list).toList();
   }
 
-  Future<void> loadAll() async {
-    await _instance.loadStatistics();
-    _instance.loadStatTypes();
-    _instance.loadProcesses();
+  Future<void> loadFromFile(String path) async {
+    statTypes.clear();
+    processes.clear();
+
+    final statisticsSnapshot = Map<String, Statistic>.from(statistics);
+
+    // Load and parse the file in a separate isolate to avoid blocking the UI
+    final result = await Isolate.run(() async {
+      final content = await File(path).readAsString();
+      if (!content.contains('ENDHEADER')) {
+        throw const FormatException('Not a valid .out file: missing ENDHEADER');
+      }
+      final parsedStatTypes = _parseStatTypes(content, statisticsSnapshot);
+      final parsedProcesses = _parseProcesses(content, parsedStatTypes);
+      return (statTypes: parsedStatTypes, processes: parsedProcesses);
+    });
+
+    statTypes.addAll(result.statTypes);
+    processes.addAll(result.processes);
   }
 
   Future<void> loadStatistics() async {
@@ -113,9 +130,8 @@ class DataManager {
     }
   }
 
-  void loadStatTypes() {
-    final content = testData;
-
+  static Map<int, StatType> _parseStatTypes(String content, Map<String, Statistic> statistics) {
+    final statTypes = <int, StatType>{};
     final match = RegExp(r'StatTypes = \[(.*?)\]', dotAll: true).firstMatch(content);
 
     if (match != null) {
@@ -142,11 +158,12 @@ class DataManager {
         }
       }
     }
+
+    return statTypes;
   }
 
-  void loadProcesses() {
-    final content = testData;
-
+  static Map<String, List<Process>> _parseProcesses(String content, Map<int, StatType> statTypes) {
+    final processes = <String, List<Process>>{};
     final processesRaw = content.split('ENDHEADER')[1].trim().split('\n');
     for (final line in processesRaw) {
       final parts = line.split(' ');
@@ -212,6 +229,8 @@ class DataManager {
         processes[processName]!.add(newProcess);
       }
     }
+
+    return processes;
   }
 
   /// Find a process by its unique identifiers: StatTypeNum, ProcessName, ProcessId, SessionId

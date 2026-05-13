@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:multi_split_view/multi_split_view.dart';
+import 'package:vsd/domain/data_manager.dart';
 import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/domain/models/time_series.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
@@ -20,21 +21,62 @@ class _HomePageState extends State<HomePage> {
   Process? selectedProcess;
   int? selectedStatistic;
   Set<int>? _multiChartSelection;
+  bool _isLoading = false;
+  String? _loadError;
+  int _dataVersion = 0;
+
+  Future<void> _handleFileSelected(String path) async {
+    if (_isLoading) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+      selectedProcess = null;
+      selectedStatistic = null;
+      _multiChartSelection = null;
+    });
+    try {
+      await DataManager().loadFromFile(path);
+      setState(() {
+        _isLoading = false;
+        _dataVersion++;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _loadError = e.toString();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          FileBar(),
-          Expanded(
-            child: multiSplitViewTheme(
-              child: MultiSplitView(
-                axis: .vertical,
-                initialAreas: [tablesArea(), statsChartArea()],
+          FileBar(onFileSelected: _handleFileSelected),
+          if (_isLoading)
+            const Expanded(child: Center(child: CircularProgressIndicator()))
+          else if (_loadError != null)
+            Expanded(
+              child: Center(
+                child: Text(
+                  'Error loading file: $_loadError',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: multiSplitViewTheme(
+                child: MultiSplitView(
+                  axis: .vertical,
+                  initialAreas: [tablesArea(), statsChartArea()],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -57,6 +99,7 @@ class _HomePageState extends State<HomePage> {
   Area processTableArea() {
     return Area(
       builder: (context, area) => ProcessTable(
+        key: ValueKey(_dataVersion),
         onProcessSelected: (process) {
           setState(() {
             selectedProcess = process;
