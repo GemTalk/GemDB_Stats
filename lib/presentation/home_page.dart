@@ -113,7 +113,7 @@ class _HomePageState extends State<HomePage> {
 
   Area statsArea() {
     return Area(
-      size: 500,
+      size: 600,
       min: 350,
       builder: (context, area) => multiSplitViewTheme(
         child: MultiSplitView(

@@ -50,14 +50,14 @@ class _ProcessTableState extends State<ProcessTable> {
       enableContextMenu: false,
       width: 155,
     ),
-    PlutoColumn(
-      title: 'File',
-      field: 'file',
-      type: PlutoColumnType.text(),
-      enableColumnDrag: false,
-      enableContextMenu: false,
-      width: 50,
-    ),
+    // PlutoColumn(
+    //   title: 'File',
+    //   field: 'file',
+    //   type: PlutoColumnType.text(),
+    //   enableColumnDrag: false,
+    //   enableContextMenu: false,
+    //   width: 50,
+    // ),
     PlutoColumn(
       title: 'Samples',
       field: 'samples',
