@@ -171,9 +171,10 @@ class DataManager {
           final id = int.parse(typeMatch.group(3)!);
           final statNames = typeMatch.group(2)!.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
 
-          // Look up Statistic objects by name
+          // Look up Statistic objects by name, skipping the first 6 header fields
+          // (StatTypeNum, Time, ProcessName, ProcessId, SessionId, CacheSerialNum)
           final stats = <Statistic>[];
-          for (final statName in statNames) {
+          for (final statName in statNames.skip(6)) {
             if (statistics.containsKey(statName)) {
               stats.add(statistics[statName]!);
             }
@@ -237,11 +238,11 @@ class DataManager {
         existingProcess.samples += 1;
 
         // Add new data points to existing process
-        for (int i = 5; i < existingProcess.type.statistics.length; i++) {
-          final stat = existingProcess.type.statistics[i];
+        for (int statIdx = 0; statIdx < existingProcess.type.statistics.length; statIdx++) {
+          final stat = existingProcess.type.statistics[statIdx];
 
           existingProcess.statisticData[stat.name]!.points.add(
-            DataPoint(timestamp: timestamp, value: int.tryParse(parts[i]) ?? 0),
+            DataPoint(timestamp: timestamp, value: int.tryParse(parts[statIdx + 6]) ?? 0),
           );
         }
       } else {
@@ -257,12 +258,12 @@ class DataManager {
         );
 
         // Initialize TimeSeries for each statistic in the StatType
-        for (int i = 5; i < newProcess.type.statistics.length; i++) {
-          final stat = newProcess.type.statistics[i];
+        for (int statIdx = 0; statIdx < newProcess.type.statistics.length; statIdx++) {
+          final stat = newProcess.type.statistics[statIdx];
 
           newProcess.statisticData[stat.name] = TimeSeries(
             statistic: stat,
-            points: [DataPoint(timestamp: timestamp, value: int.tryParse(parts[i]) ?? 0)],
+            points: [DataPoint(timestamp: timestamp, value: int.tryParse(parts[statIdx + 6]) ?? 0)],
           );
         }
 
@@ -277,8 +278,8 @@ class DataManager {
   Process? findProcess({
     required int statTypeId,
     required String processName,
-    required int processId,
-    required String sessionId,
+    required int? processId,
+    required int? sessionId,
   }) {
     final processList = processes[processName];
     if (processList == null) {

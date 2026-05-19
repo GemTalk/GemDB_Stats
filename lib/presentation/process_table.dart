@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pluto_grid/pluto_grid.dart';
 import 'package:vsd/domain/data_manager.dart';
 import 'package:vsd/domain/models/process.dart';
+import 'package:vsd/presentation/_reusable_components/case_insensitive_text_type.dart';
 
 class ProcessTable extends StatefulWidget {
   const ProcessTable({super.key, this.onProcessSelected});
@@ -85,7 +86,7 @@ class _ProcessTableState extends State<ProcessTable> {
     PlutoColumn(
       title: 'Type',
       field: 'type',
-      type: _CaseInsensitiveTextType(),
+      type: CaseInsensitiveTextType(),
       enableColumnDrag: false,
       enableContextMenu: false,
       width: 140,
@@ -168,8 +169,10 @@ class _ProcessTableState extends State<ProcessTable> {
             _stateManager?.clearCurrentSelecting();
 
             final processName = event.row!.cells['name']!.value as String;
-            final processId = int.parse(event.row!.cells['processId']!.value as String);
-            final sessionId = event.row!.cells['sessionId']!.value as String;
+            final processIdStr = event.row!.cells['processId']!.value as String;
+            final sessionIdStr = event.row!.cells['sessionId']!.value as String;
+            final processId = processIdStr.isEmpty ? null : int.tryParse(processIdStr);
+            final sessionId = sessionIdStr.isEmpty ? null : int.tryParse(sessionIdStr);
             final statTypeId = event.row!.cells['typeId']!.value as int;
 
             final process = DataManager().findProcess(
@@ -192,29 +195,4 @@ class _ProcessTableState extends State<ProcessTable> {
     final processName = row.cells['name']!.value as String;
     return '$typeId|$sessionId|$processId|$processName';
   }
-}
-
-class _CaseInsensitiveTextType implements PlutoColumnType {
-  @override
-  final dynamic defaultValue = '';
-
-  @override
-  bool isValid(dynamic value) => value is String || value is num;
-
-  @override
-  int compare(dynamic a, dynamic b) {
-    if (a == null && b == null) {
-      return 0;
-    }
-    if (a == null) {
-      return -1;
-    }
-    if (b == null) {
-      return 1;
-    }
-    return a.toString().toLowerCase().compareTo(b.toString().toLowerCase());
-  }
-
-  @override
-  dynamic makeCompareValue(dynamic v) => v.toString().toLowerCase();
 }

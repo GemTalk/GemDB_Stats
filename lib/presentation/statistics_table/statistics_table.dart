@@ -4,6 +4,7 @@ import 'package:pluto_grid/pluto_grid.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/domain/models/statistic.dart';
+import 'package:vsd/presentation/_reusable_components/case_insensitive_text_type.dart';
 import 'package:vsd/presentation/_reusable_components/pulldown_button.dart';
 import 'package:vsd/presentation/_reusable_components/search_bar.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
@@ -46,7 +47,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
       PlutoColumn(
         title: 'Name',
         field: 'name',
-        type: PlutoColumnType.text(),
+        type: CaseInsensitiveTextType(),
         enableColumnDrag: false,
         enableContextMenu: false,
         renderer: _nameRenderer,
