@@ -21,31 +21,39 @@ class _HomePageState extends State<HomePage> {
   Process? selectedProcess;
   int? selectedStatistic;
   ({Set<int> primary, Set<int> secondary})? _multiChartSelection;
-  bool _isLoading = false;
+  double? _loadProgress;
   String? _loadError;
   int _dataVersion = 0;
 
   Future<void> _handleFileSelected(String content) async {
-    if (_isLoading) {
+    // _loadProgress is null when not loading
+    if (_loadProgress != null) {
       return;
     }
 
     setState(() {
-      _isLoading = true;
+      _loadProgress = 0.0;
       _loadError = null;
       selectedProcess = null;
       selectedStatistic = null;
       _multiChartSelection = null;
     });
     try {
-      await DataManager().loadFromContent(content);
+      await DataManager().loadFromContent(
+        content,
+        onProgress: (p) {
+          if (mounted) {
+            setState(() => _loadProgress = p);
+          }
+        },
+      );
       setState(() {
-        _isLoading = false;
+        _loadProgress = null;
         _dataVersion++;
       });
     } catch (e) {
       setState(() {
-        _isLoading = false;
+        _loadProgress = null;
         _loadError = e.toString();
       });
     }
@@ -57,8 +65,8 @@ class _HomePageState extends State<HomePage> {
       body: Column(
         children: [
           FileBar(onFileSelected: _handleFileSelected),
-          if (_isLoading)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
+          if (_loadProgress != null)
+            progressIndicator()
           else if (_loadError != null)
             Expanded(
               child: Center(
@@ -78,6 +86,27 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget progressIndicator() {
+    return Expanded(
+      child: Center(
+        child: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LinearProgressIndicator(value: _loadProgress),
+              const SizedBox(height: 8),
+              Text(
+                '${(_loadProgress! * 100).round()}%',
+                style: const TextStyle(fontSize: 13, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

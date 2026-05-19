@@ -8,5 +8,9 @@ class StatType {
   List<Statistic> statistics;
 
   @override
-  String toString() => 'StatType(id: $id, name: $name, statistics: $statistics)';
+  String toString() =>
+      '''
+StatType(id: $id, name: $name, statistics: [
+  ${statistics.map((s) => s.name).join(', ')}
+])''';
 }

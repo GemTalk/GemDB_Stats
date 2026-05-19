@@ -23,26 +23,55 @@ class DataManager {
     return processes.values.expand((list) => list).toList();
   }
 
-  Future<void> loadFromContent(String content) async {
+  /// Load and parse data from .out file content
+  Future<void> loadFromContent(String content, {void Function(double)? onProgress}) async {
     statTypes.clear();
     processes.clear();
 
-    final statisticsSnapshot = Map<String, Statistic>.from(statistics);
+    // Use an isolate to parse the content without blocking the UI
+    final receivePort = ReceivePort();
+    await Isolate.spawn<_ParseArgs>(
+      (_ParseArgs args) {
+        try {
+          final content = args.content;
+          if (!content.contains('ENDHEADER')) {
+            args.sendPort.send('Not a valid .out file: missing ENDHEADER');
+            return;
+          }
+          args.sendPort.send(0.05);
+          final parsedStatTypes = parseStatTypes(content, args.statistics);
+          args.sendPort.send(0.1);
+          final parsedProcesses = _parseProcesses(
+            content,
+            parsedStatTypes,
+            onProgress: (p) => args.sendPort.send(0.1 + 0.9 * p),
+          );
+          args.sendPort.send((statTypes: parsedStatTypes, processes: parsedProcesses));
+        } catch (e) {
+          args.sendPort.send(e.toString());
+        }
+      },
+      (sendPort: receivePort.sendPort, content: content, statistics: Map.from(statistics)),
+    );
 
-    // Parse the file in a separate isolate to avoid blocking the UI
-    final result = await Isolate.run(() {
-      if (!content.contains('ENDHEADER')) {
-        throw const FormatException('Not a valid .out file: missing ENDHEADER');
+    // Listen for messages from the isolate
+    await for (final message in receivePort) {
+      if (message is double) {
+        onProgress?.call(message);
+      } else if (message is String) {
+        receivePort.close();
+        throw FormatException(message);
+      } else {
+        final result = message as ({Map<int, StatType> statTypes, Map<String, List<Process>> processes});
+        statTypes.addAll(result.statTypes);
+        processes.addAll(result.processes);
+        receivePort.close();
+        break;
       }
-      final parsedStatTypes = _parseStatTypes(content, statisticsSnapshot);
-      final parsedProcesses = _parseProcesses(content, parsedStatTypes);
-      return (statTypes: parsedStatTypes, processes: parsedProcesses);
-    });
-
-    statTypes.addAll(result.statTypes);
-    processes.addAll(result.processes);
+    }
   }
 
+  /// Load and parse statistics definitions from vsd.stats.tcl
   Future<void> loadStatistics() async {
     final content = await rootBundle.loadString('assets/vsd.stats.tcl');
 
@@ -106,10 +135,9 @@ class DataManager {
 
       for (final match in defEntries) {
         final name = match.group(1)!.trim();
-        final params = RegExp(r'"[^"]*"|\S+')
-            .allMatches(match.group(2)!.trim())
-            .map((m) => m.group(0)!.replaceAll('"', ''))
-            .toList();
+        final params = RegExp(
+          r'"[^"]*"|\S+',
+        ).allMatches(match.group(2)!.trim()).map((m) => m.group(0)!.replaceAll('"', '')).toList();
 
         if (params.length >= 4) {
           final type = params[0];
@@ -131,7 +159,7 @@ class DataManager {
     }
   }
 
-  static Map<int, StatType> _parseStatTypes(String content, Map<String, Statistic> statistics) {
+  static Map<int, StatType> parseStatTypes(String content, Map<String, Statistic> statistics) {
     final statTypes = <int, StatType>{};
     final match = RegExp(r'StatTypes = \[(.*?)\]', dotAll: true).firstMatch(content);
 
@@ -141,7 +169,7 @@ class DataManager {
         final typeMatch = RegExp(r'(\w+)\s*\(\s*(.*?)\s*\)\s*(\d+)', dotAll: true).firstMatch(type.trim());
         if (typeMatch != null) {
           final id = int.parse(typeMatch.group(3)!);
-          final statNames = typeMatch.group(2)!.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+          final statNames = typeMatch.group(2)!.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
 
           // Look up Statistic objects by name
           final stats = <Statistic>[];
@@ -163,10 +191,20 @@ class DataManager {
     return statTypes;
   }
 
-  static Map<String, List<Process>> _parseProcesses(String content, Map<int, StatType> statTypes) {
+  static Map<String, List<Process>> _parseProcesses(
+    String content,
+    Map<int, StatType> statTypes, {
+    void Function(double)? onProgress,
+  }) {
     final processes = <String, List<Process>>{};
     final processesRaw = content.split('ENDHEADER')[1].trim().split('\n');
-    for (final line in processesRaw) {
+    final total = processesRaw.length;
+    final step = (total / 100).ceil().clamp(1, total);
+    for (int i = 0; i < processesRaw.length; i++) {
+      if (onProgress != null && i % step == 0) {
+        onProgress(i / total);
+      }
+      final line = processesRaw[i];
       final parts = line.split(' ');
 
       final processName = parts[2];
@@ -257,3 +295,5 @@ class DataManager {
     return null;
   }
 }
+
+typedef _ParseArgs = ({SendPort sendPort, String content, Map<String, Statistic> statistics});
