@@ -24,8 +24,8 @@ class _ProcessTableState extends State<ProcessTable> {
         'endTime': PlutoCell(value: DateFormat('yyyy/MM/dd HH:mm:ss').format(process.endTime)),
         'file': PlutoCell(value: 1),
         'samples': PlutoCell(value: process.samples),
-        'processId': PlutoCell(value: process.processId.toString()),
-        'sessionId': PlutoCell(value: process.sessionId),
+        'processId': PlutoCell(value: (process.processId ?? '').toString()),
+        'sessionId': PlutoCell(value: (process.sessionId ?? '').toString()),
         'type': PlutoCell(value: process.type.name),
         'typeId': PlutoCell(value: process.type.id), // Not displayed in the table, but used for finding the process
         'name': PlutoCell(value: process.name),
@@ -85,7 +85,7 @@ class _ProcessTableState extends State<ProcessTable> {
     PlutoColumn(
       title: 'Type',
       field: 'type',
-      type: PlutoColumnType.text(),
+      type: _CaseInsensitiveTextType(),
       enableColumnDrag: false,
       enableContextMenu: false,
       width: 140,
@@ -192,4 +192,29 @@ class _ProcessTableState extends State<ProcessTable> {
     final processName = row.cells['name']!.value as String;
     return '$typeId|$sessionId|$processId|$processName';
   }
+}
+
+class _CaseInsensitiveTextType implements PlutoColumnType {
+  @override
+  final dynamic defaultValue = '';
+
+  @override
+  bool isValid(dynamic value) => value is String || value is num;
+
+  @override
+  int compare(dynamic a, dynamic b) {
+    if (a == null && b == null) {
+      return 0;
+    }
+    if (a == null) {
+      return -1;
+    }
+    if (b == null) {
+      return 1;
+    }
+    return a.toString().toLowerCase().compareTo(b.toString().toLowerCase());
+  }
+
+  @override
+  dynamic makeCompareValue(dynamic v) => v.toString().toLowerCase();
 }

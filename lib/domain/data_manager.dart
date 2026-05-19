@@ -209,8 +209,9 @@ class DataManager {
 
       final processName = parts[2];
       final statTypeId = int.parse(parts[0]);
-      final processId = int.parse(parts[3]);
-      final sessionId = parts.length > 4 ? parts[4] : '';
+      // Session ID and Process ID are null if they're not positive
+      final processId = int.parse(parts[3]) > 0 ? int.parse(parts[3]) : null;
+      final sessionId = int.parse(parts[4]) > 0 ? int.parse(parts[4]) : null;
       final timestamp = DateTime.fromMillisecondsSinceEpoch(int.parse(parts[1]) * 1000);
 
       // Initialize list for this process name if it doesn't exist

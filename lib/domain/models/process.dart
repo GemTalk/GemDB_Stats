@@ -14,8 +14,8 @@ class Process {
 
   final String name;
   final StatType type;
-  final int processId;
-  final String sessionId;
+  final int? processId;
+  final int? sessionId;
   final DateTime startTime;
   DateTime endTime;
   int samples;
