@@ -108,7 +108,10 @@ class DataManager {
 
       for (final match in defEntries) {
         final name = match.group(1)!.trim();
-        final params = match.group(2)!.trim().split(RegExp(r'\s+'));
+        final params = RegExp(r'"[^"]*"|\S+')
+            .allMatches(match.group(2)!.trim())
+            .map((m) => m.group(0)!.replaceAll('"', ''))
+            .toList();
 
         if (params.length >= 4) {
           final type = params[0];
