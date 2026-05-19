@@ -33,7 +33,6 @@ class _StatisticsTableState extends State<StatisticsTable> {
   int? _hoveredRowIndex;
   String searchQuery = '';
   bool hideStatisticsWithNoData = false;
-  bool _hideStatsSummary = false;
   bool _multiChartMode = false;
   Set<int> _primaryChecked = {};
   Set<int> _secondaryChecked = {};
@@ -245,35 +244,41 @@ class _StatisticsTableState extends State<StatisticsTable> {
 
   List<PlutoRow> _buildRows() {
     final statistics = widget.selectedProcess.type.statistics;
-    return statistics.asMap().entries.where((entry) {
-      final matchesSearch = searchQuery.isEmpty || entry.value.name.toLowerCase().contains(searchQuery.toLowerCase());
-      if (!matchesSearch) {
-        return false;
-      }
-      if (!hideStatisticsWithNoData) {
-        return true;
-      }
-      return widget.selectedProcess.statisticData[entry.value.name]?.hasData ?? false;
-    }).map((entry) {
-      final statisticIndex = entry.key;
-      final statistic = entry.value;
-      final ts = widget.selectedProcess.statisticData[statistic.name];
-      final hasData = ts?.hasData ?? false;
-      final minVal = ts?.min;
-      final maxVal = ts?.max;
-      final avgVal = ts?.average;
+    return statistics
+        .asMap()
+        .entries
+        .where((entry) {
+          final matchesSearch =
+              searchQuery.isEmpty || entry.value.name.toLowerCase().contains(searchQuery.toLowerCase());
+          if (!matchesSearch) {
+            return false;
+          }
+          if (!hideStatisticsWithNoData) {
+            return true;
+          }
+          return widget.selectedProcess.statisticData[entry.value.name]?.hasData ?? false;
+        })
+        .map((entry) {
+          final statisticIndex = entry.key;
+          final statistic = entry.value;
+          final ts = widget.selectedProcess.statisticData[statistic.name];
+          final hasData = ts?.hasData ?? false;
+          final minVal = ts?.min;
+          final maxVal = ts?.max;
+          final avgVal = ts?.average;
 
-      return PlutoRow(
-        cells: {
-          'statIdx': PlutoCell(value: statisticIndex),
-          'name': PlutoCell(value: statistic.name),
-          'units': PlutoCell(value: statistic.units),
-          'min': PlutoCell(value: (hasData && !_hideStatsSummary && minVal != null) ? _formatStat(minVal) : ''),
-          'max': PlutoCell(value: (hasData && !_hideStatsSummary && maxVal != null) ? _formatStat(maxVal) : ''),
-          'avg': PlutoCell(value: (hasData && !_hideStatsSummary && avgVal != null) ? _formatStat(avgVal) : ''),
-        },
-      );
-    }).toList();
+          return PlutoRow(
+            cells: {
+              'statIdx': PlutoCell(value: statisticIndex),
+              'name': PlutoCell(value: statistic.name),
+              'units': PlutoCell(value: statistic.units),
+              'min': PlutoCell(value: (hasData && minVal != null) ? _formatStat(minVal) : ''),
+              'max': PlutoCell(value: (hasData && maxVal != null) ? _formatStat(maxVal) : ''),
+              'avg': PlutoCell(value: (hasData && avgVal != null) ? _formatStat(avgVal) : ''),
+            },
+          );
+        })
+        .toList();
   }
 
   void _updateGridRows() {
@@ -485,26 +490,6 @@ class _StatisticsTableState extends State<StatisticsTable> {
                   widget.onStatisticSelected?.call(null);
                 }
               }
-            });
-            _updateGridRows();
-          },
-        ),
-        MacosPulldownMenuItem(
-          label: 'Show statistics summary',
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 14,
-                child: !_hideStatsSummary ? const Icon(Icons.check, size: 14) : null,
-              ),
-              const SizedBox(width: 8),
-              const Text('Show statistics summary'),
-            ],
-          ),
-          onTap: () {
-            setState(() {
-              _hideStatsSummary = !_hideStatsSummary;
             });
             _updateGridRows();
           },
