@@ -1,5 +1,5 @@
 /// A class representing a statistic, parsed from vsd.stats.tcl
-/// 
+///
 /// `name` is the name of the statistic
 /// `type` is one of the following: "counter", "counter64", "uvalue" "svalue" "float" "uvalue64"
 /// `level` is one of the following: "common" "advanced" "wizard"

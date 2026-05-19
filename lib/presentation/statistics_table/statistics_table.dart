@@ -18,8 +18,8 @@ class StatisticsTable extends StatefulWidget {
 
   final Process selectedProcess;
   final void Function(int?)? onStatisticSelected;
-  // null = MultiChart mode off; Set<int> = MultiChart mode on with checked indices
-  final void Function(Set<int>?)? onMultiChartSelectionChanged;
+  // null = MultiChart mode off; non-null = mode on with primary/secondary index sets
+  final void Function(({Set<int> primary, Set<int> secondary})?)? onMultiChartSelectionChanged;
 
   @override
   State<StatisticsTable> createState() => _StatisticsTableState();
@@ -33,7 +33,8 @@ class _StatisticsTableState extends State<StatisticsTable> {
   bool hideStatisticsWithNoData = false;
   bool _hideStatsSummary = false;
   bool _multiChartMode = false;
-  Set<int> _multiChartChecked = {};
+  Set<int> _primaryChecked = {};
+  Set<int> _secondaryChecked = {};
 
   @override
   void dispose() {
@@ -50,7 +51,8 @@ class _StatisticsTableState extends State<StatisticsTable> {
       _searchController.clear();
       if (_multiChartMode) {
         _multiChartMode = false;
-        _multiChartChecked = {};
+        _primaryChecked = {};
+        _secondaryChecked = {};
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             widget.onMultiChartSelectionChanged?.call(null);
@@ -60,25 +62,46 @@ class _StatisticsTableState extends State<StatisticsTable> {
     }
   }
 
-  /// Returns the chart color for a checked statistic, or null if unchecked/no data.
-  /// Color index matches Cristalyse's assignment order (position among valid series).
-  Color? _getSeriesColor(int statisticIndex) {
-    if (!_multiChartChecked.contains(statisticIndex)) {
+  void _fireSelectionChanged() {
+    widget.onMultiChartSelectionChanged?.call(
+      (primary: Set.from(_primaryChecked), secondary: Set.from(_secondaryChecked)),
+    );
+  }
+
+  bool _hasData(int statisticIndex) {
+    if (statisticIndex >= widget.selectedProcess.type.statistics.length) {
+      return false;
+    }
+    final stat = widget.selectedProcess.type.statistics[statisticIndex];
+    final ts = widget.selectedProcess.statisticData[stat.name];
+    return ts != null && ts.points.length >= 2;
+  }
+
+  /// Color for primary-axis series; null if unchecked or has no data.
+  Color? _getPrimarySeriesColor(int statisticIndex) {
+    if (!_primaryChecked.contains(statisticIndex)) {
       return null;
     }
-    final checkedWithData = _multiChartChecked.where((i) {
-      if (i >= widget.selectedProcess.type.statistics.length) {
-        return false;
-      }
-      final stat = widget.selectedProcess.type.statistics[i];
-      final ts = widget.selectedProcess.statisticData[stat.name];
-      return ts != null && ts.points.length >= 2;
-    }).toList();
-    final colorIndex = checkedWithData.indexOf(statisticIndex);
-    if (colorIndex < 0) {
+    final validList = _primaryChecked.where(_hasData).toList();
+    final idx = validList.indexOf(statisticIndex);
+    if (idx < 0) {
       return null;
     }
-    return kMultiChartPalette[colorIndex % kMultiChartPalette.length];
+    return kMultiChartPalette[idx % kMultiChartPalette.length];
+  }
+
+  /// Color for secondary-axis series; offset past primary valid count.
+  Color? _getSecondarySeriesColor(int statisticIndex) {
+    if (!_secondaryChecked.contains(statisticIndex)) {
+      return null;
+    }
+    final primaryValidCount = _primaryChecked.where(_hasData).length;
+    final validList = _secondaryChecked.where(_hasData).toList();
+    final idx = validList.indexOf(statisticIndex);
+    if (idx < 0) {
+      return null;
+    }
+    return kMultiChartPalette[(primaryValidCount + idx) % kMultiChartPalette.length];
   }
 
   @override
@@ -125,8 +148,6 @@ class _StatisticsTableState extends State<StatisticsTable> {
               final minVal = ts?.min;
               final maxVal = ts?.max;
               final avgVal = ts?.average;
-              final isChecked = _multiChartChecked.contains(statisticIndex);
-              final seriesColor = _multiChartMode ? _getSeriesColor(statisticIndex) : null;
 
               return MouseRegion(
                 cursor: SystemMouseCursors.click,
@@ -136,14 +157,6 @@ class _StatisticsTableState extends State<StatisticsTable> {
                   onTap: () {
                     setState(() {
                       selectedIndex = statisticIndex;
-                      if (_multiChartMode) {
-                        if (isChecked) {
-                          _multiChartChecked.remove(statisticIndex);
-                        } else {
-                          _multiChartChecked.add(statisticIndex);
-                        }
-                        widget.onMultiChartSelectionChanged?.call(Set.from(_multiChartChecked));
-                      }
                     });
                     widget.onStatisticSelected?.call(statisticIndex);
                   },
@@ -158,8 +171,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
                     alignment: Alignment.centerLeft,
                     child: _multiChartMode
                         ? multiChartModeRow(
-                            isChecked,
-                            seriesColor,
+                            statisticIndex,
                             statistic,
                             hasData,
                             _hideStatsSummary ? null : minVal,
@@ -219,34 +231,53 @@ class _StatisticsTableState extends State<StatisticsTable> {
   }
 
   Widget multiChartModeRow(
-    bool isChecked,
-    Color? seriesColor,
+    int statisticIndex,
     Statistic statistic,
     bool hasData,
     int? minVal,
     int? maxVal,
     double? avgVal,
   ) {
+    final isPrimary = _primaryChecked.contains(statisticIndex);
+    final isSecondary = _secondaryChecked.contains(statisticIndex);
+    final primaryColor = _getPrimarySeriesColor(statisticIndex);
+    final secondaryColor = _getSecondarySeriesColor(statisticIndex);
+    final labelColor = primaryColor ?? secondaryColor;
+
     return Row(
       children: [
-        IgnorePointer(
-          child: ShadCheckbox(
-            value: isChecked,
-            onChanged: (_) {},
-            color: seriesColor,
-            size: 14,
-            uncheckedColor: Colors.white,
-            checkboxPadding: EdgeInsets.zero,
-            decoration: ShadDecoration(
-              border: ShadBorder.all(
-                color: isChecked ? (seriesColor ?? Colors.grey.shade600) : Colors.grey.shade400,
-                radius: BorderRadius.circular(4),
-                width: 1,
-              ),
-            ),
-          ),
+        _axisCheckbox(
+          isChecked: isPrimary,
+          seriesColor: primaryColor,
+          onToggle: () {
+            setState(() {
+              if (isPrimary) {
+                _primaryChecked.remove(statisticIndex);
+              } else {
+                _primaryChecked.add(statisticIndex);
+                _secondaryChecked.remove(statisticIndex);
+              }
+            });
+            _fireSelectionChanged();
+          },
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
+        _axisCheckbox(
+          isChecked: isSecondary,
+          seriesColor: secondaryColor,
+          onToggle: () {
+            setState(() {
+              if (isSecondary) {
+                _secondaryChecked.remove(statisticIndex);
+              } else {
+                _secondaryChecked.add(statisticIndex);
+                _primaryChecked.remove(statisticIndex);
+              }
+            });
+            _fireSelectionChanged();
+          },
+        ),
+        const SizedBox(width: 8),
         Expanded(
           child: Text(
             statistic.name,
@@ -255,7 +286,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: hasData ? FontWeight.bold : FontWeight.normal,
-              color: seriesColor,
+              color: labelColor,
             ),
           ),
         ),
@@ -267,6 +298,32 @@ class _StatisticsTableState extends State<StatisticsTable> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _axisCheckbox({
+    required bool isChecked,
+    required Color? seriesColor,
+    required VoidCallback onToggle,
+  }) {
+    return GestureDetector(
+      onTap: onToggle,
+      behavior: HitTestBehavior.opaque,
+      child: ShadCheckbox(
+        value: isChecked,
+        onChanged: (_) => onToggle(),
+        color: seriesColor,
+        size: 14,
+        uncheckedColor: Colors.white,
+        checkboxPadding: EdgeInsets.zero,
+        decoration: ShadDecoration(
+          border: ShadBorder.all(
+            color: isChecked ? (seriesColor ?? Colors.grey.shade600) : Colors.grey.shade400,
+            radius: BorderRadius.circular(4),
+            width: 1,
+          ),
+        ),
+      ),
     );
   }
 
@@ -294,10 +351,12 @@ class _StatisticsTableState extends State<StatisticsTable> {
         setState(() {
           _multiChartMode = !_multiChartMode;
           if (_multiChartMode) {
-            _multiChartChecked = selectedIndex != null ? {selectedIndex!} : {};
-            widget.onMultiChartSelectionChanged?.call(Set.from(_multiChartChecked));
+            _primaryChecked = selectedIndex != null ? {selectedIndex!} : {};
+            _secondaryChecked = {};
+            _fireSelectionChanged();
           } else {
-            _multiChartChecked = {};
+            _primaryChecked = {};
+            _secondaryChecked = {};
             widget.onMultiChartSelectionChanged?.call(null);
           }
         });

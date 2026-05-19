@@ -20,7 +20,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   Process? selectedProcess;
   int? selectedStatistic;
-  Set<int>? _multiChartSelection;
+  ({Set<int> primary, Set<int> secondary})? _multiChartSelection;
   bool _isLoading = false;
   String? _loadError;
   int _dataVersion = 0;
@@ -177,7 +177,8 @@ class _HomePageState extends State<HomePage> {
     return Area(
       builder: (context, area) {
         if (_multiChartSelection != null) {
-          if (_multiChartSelection!.isEmpty) {
+          final sel = _multiChartSelection!;
+          if (sel.primary.isEmpty && sel.secondary.isEmpty) {
             return const Align(
               alignment: Alignment.center,
               child: Text(
@@ -187,13 +188,17 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
-          final chartSeries = _multiChartSelection!.where((i) => i < selectedProcess!.type.statistics.length).map((i) {
-            final stat = selectedProcess!.type.statistics[i];
-            final ts = selectedProcess!.statisticData[stat.name];
-            return (name: stat.name, points: ts?.points ?? <DataPoint>[]);
-          }).toList();
+          List<({String name, List<DataPoint> points})> toSeries(Set<int> indices) =>
+              indices.where((i) => i < selectedProcess!.type.statistics.length).map((i) {
+                final stat = selectedProcess!.type.statistics[i];
+                final ts = selectedProcess!.statisticData[stat.name];
+                return (name: stat.name, points: ts?.points ?? <DataPoint>[]);
+              }).toList();
 
-          return MultiStatisticLineChart(series: chartSeries);
+          return MultiStatisticLineChart(
+            primarySeries: toSeries(sel.primary),
+            secondarySeries: toSeries(sel.secondary),
+          );
         }
 
         if (selectedProcess == null || selectedStatistic == null) {

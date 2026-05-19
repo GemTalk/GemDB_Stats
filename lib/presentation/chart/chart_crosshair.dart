@@ -50,6 +50,5 @@ class CrosshairPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CrosshairPainter old) =>
-      old.xPosition != xPosition || old.dots != dots;
+  bool shouldRepaint(CrosshairPainter old) => old.xPosition != xPosition || old.dots != dots;
 }
