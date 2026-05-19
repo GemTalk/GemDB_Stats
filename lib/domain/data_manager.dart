@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/services.dart';
@@ -24,15 +23,14 @@ class DataManager {
     return processes.values.expand((list) => list).toList();
   }
 
-  Future<void> loadFromFile(String path) async {
+  Future<void> loadFromContent(String content) async {
     statTypes.clear();
     processes.clear();
 
     final statisticsSnapshot = Map<String, Statistic>.from(statistics);
 
-    // Load and parse the file in a separate isolate to avoid blocking the UI
-    final result = await Isolate.run(() async {
-      final content = await File(path).readAsString();
+    // Parse the file in a separate isolate to avoid blocking the UI
+    final result = await Isolate.run(() {
       if (!content.contains('ENDHEADER')) {
         throw const FormatException('Not a valid .out file: missing ENDHEADER');
       }

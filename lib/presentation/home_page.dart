@@ -25,7 +25,7 @@ class _HomePageState extends State<HomePage> {
   String? _loadError;
   int _dataVersion = 0;
 
-  Future<void> _handleFileSelected(String path) async {
+  Future<void> _handleFileSelected(String content) async {
     if (_isLoading) {
       return;
     }
@@ -38,7 +38,7 @@ class _HomePageState extends State<HomePage> {
       _multiChartSelection = null;
     });
     try {
-      await DataManager().loadFromFile(path);
+      await DataManager().loadFromContent(content);
       setState(() {
         _isLoading = false;
         _dataVersion++;

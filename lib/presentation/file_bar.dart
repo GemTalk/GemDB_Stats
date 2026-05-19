@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -29,11 +30,23 @@ class _FileBarState extends State<FileBar> {
 
     if (result != null && result.files.single.path != null) {
       final path = result.files.single.path!;
+      var name = result.files.single.name;
+
       await prefs.setString(_kLastDirectoryKey, File(path).parent.path);
+
+      final String content;
+      if (path.endsWith('.gz')) {
+        final compressed = await File(path).readAsBytes();
+        content = utf8.decode(gzip.decode(compressed));
+        name = name.substring(0, name.length - 3);
+      } else {
+        content = await File(path).readAsString();
+      }
+
       setState(() {
-        _fileName = result.files.single.name;
+        _fileName = name;
       });
-      widget.onFileSelected?.call(path);
+      widget.onFileSelected?.call(content);
     }
   }
 
@@ -63,7 +76,7 @@ class _FileBarState extends State<FileBar> {
         child: GestureDetector(
           onTap: _pickFile,
           child: Container(
-            width: 500,
+            constraints: const BoxConstraints(maxWidth: 800),
             height: 26,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
