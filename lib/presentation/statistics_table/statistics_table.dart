@@ -318,8 +318,13 @@ class _StatisticsTableState extends State<StatisticsTable> {
           child: MouseRegion(
             onHover: (event) {
               final scrollOffset = _stateManager?.scroll.vertical?.offset ?? 0;
-              final adjustedY = event.localPosition.dy - 30 + scrollOffset;
-              final rowIdx = adjustedY < 0 ? null : (adjustedY / 25).floor();
+              final rowsTopOffset = (_stateManager?.rowsTopOffset ?? 30) +
+                  PlutoGridSettings.gridBorderWidth;
+              final rowTotalHeight = _stateManager?.rowTotalHeight ?? 26.0;
+              final adjustedY =
+                  event.localPosition.dy - rowsTopOffset + scrollOffset;
+              final rowIdx =
+                  adjustedY < 0 ? null : (adjustedY / rowTotalHeight).floor();
               if (rowIdx != _hoveredRowIndex) {
                 setState(() => _hoveredRowIndex = rowIdx);
               }
