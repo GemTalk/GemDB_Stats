@@ -388,11 +388,14 @@ class _StatisticsTableState extends State<StatisticsTable> {
   }
 
   String _formatStat(num value) {
+    if (value > 99999999) {
+      return '${value ~/ 1000000}M';
+    }
+    if (value > 99999) {
+      return '${value ~/ 1000}k';
+    }
     if (value is double) {
       return value.toStringAsFixed(3);
-    }
-    if (value > 99000) {
-      return '${value ~/ 1000}k';
     }
     return value.toString();
   }
