@@ -7,17 +7,21 @@ environment:
   sdk: ^3.10.8
 
 dependencies:
+  anthropic_sdk_dart: ^3.0.0
   cristalyse: ^1.17.6
   file_picker: ^10.3.10
   flutter:
     sdk: flutter
+  flutter_dotenv: ^6.0.1
   font_awesome_flutter: ^11.0.0
   intl: ^0.20.2
   macos_ui: ^2.2.2
+  mcp_dart: ^2.1.1
   multi_split_view: ^3.6.1
   pluto_grid: ^8.1.0
   shadcn_ui: ^0.54.0
   shared_preferences: ^2.5.5
+  streamdown: ^0.1.0
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.4
@@ -29,3 +33,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+    - .env

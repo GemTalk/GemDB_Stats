@@ -20,4 +20,15 @@ class Process {
   DateTime endTime;
   int samples;
   final Map<String, TimeSeries> statisticData = {}; // Keyed by statistic name
+
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'type_name': type.name,
+    'type_id': type.id,
+    'process_id': processId,
+    'session_id': sessionId,
+    'start_time': startTime.toIso8601String(),
+    'end_time': endTime.toIso8601String(),
+    'samples': samples,
+  };
 }
