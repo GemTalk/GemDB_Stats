@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:vsd/presentation/chart/trackball_tooltip.dart';
 
 const double kChartPlotTop = 16.0;
@@ -16,16 +17,18 @@ const Widget kNotEnoughDataWidget = Center(
 /// Returns a label formatter matched to [ticks].
 /// Uses integers when the step is ≥ 1; otherwise uses enough decimal
 /// places to distinguish adjacent ticks.
+/// Thousand separators (commas) are always included.
 String Function(num) chartTickFormatter(List<double> ticks) {
   if (ticks.length < 2) {
-    return (v) => v.round().toString();
+    return (v) => NumberFormat('#,##0').format(v.round());
   }
   final step = (ticks[1] - ticks[0]).abs();
   if (step >= 1) {
-    return (v) => v.round().toString();
+    return (v) => NumberFormat('#,##0').format(v.round());
   }
   final decimals = (-math.log(step) / math.ln10).ceil().clamp(1, 4);
-  return (v) => v.toStringAsFixed(decimals);
+  final fmt = NumberFormat('#,##0.${'0' * decimals}');
+  return (v) => fmt.format(v);
 }
 
 /// Generates nicely spaced tick marks for any numeric range — works for
