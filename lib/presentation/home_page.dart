@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:vsd/domain/data_manager.dart';
 import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/domain/models/time_series.dart';
+import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
+import 'package:vsd/presentation/ai_assistant/ai_assistant_panel.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
 import 'package:vsd/presentation/chart/statistic_line_chart.dart';
 import 'package:vsd/presentation/file_bar.dart';
@@ -24,6 +27,30 @@ class _HomePageState extends State<HomePage> {
   double? _loadProgress;
   String? _loadError;
   int _dataVersion = 0;
+  bool _aiPanelOpen = false;
+  late MultiSplitViewController _mainController;
+
+  @override
+  void initState() {
+    super.initState();
+    _mainController = MultiSplitViewController();
+    _mainController.areas = [mainContentArea()];
+  }
+
+  @override
+  void dispose() {
+    _mainController.dispose();
+    super.dispose();
+  }
+
+  void _toggleAiPanel() {
+    if (_aiPanelOpen) {
+      _mainController.removeAreaAt(1);
+    } else {
+      _mainController.addArea(aiPanelArea());
+    }
+    setState(() => _aiPanelOpen = !_aiPanelOpen);
+  }
 
   Future<void> _handleFileSelected(String content) async {
     // _loadProgress is null when not loading
@@ -64,7 +91,14 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Column(
         children: [
-          FileBar(onFileSelected: _handleFileSelected),
+          FileBar(
+            onFileSelected: _handleFileSelected,
+            trailing: ToolIconButton(
+              icon: FontAwesomeIcons.message,
+              tooltip: 'Toggle Chat',
+              onTap: _toggleAiPanel,
+            ),
+          ),
           if (_loadProgress != null)
             progressIndicator()
           else if (_loadError != null)
@@ -80,8 +114,8 @@ class _HomePageState extends State<HomePage> {
             Expanded(
               child: multiSplitViewTheme(
                 child: MultiSplitView(
-                  axis: .vertical,
-                  initialAreas: [tablesArea(), statsChartArea()],
+                  axis: Axis.horizontal,
+                  controller: _mainController,
                 ),
               ),
             ),
@@ -108,6 +142,25 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
+    );
+  }
+
+  Area mainContentArea() {
+    return Area(
+      builder: (context, area) => multiSplitViewTheme(
+        child: MultiSplitView(
+          axis: Axis.vertical,
+          initialAreas: [tablesArea(), statsChartArea()],
+        ),
+      ),
+    );
+  }
+
+  Area aiPanelArea() {
+    return Area(
+      size: 320,
+      min: 220,
+      builder: (context, area) => AiAssistantPanel(onClose: _toggleAiPanel),
     );
   }
 

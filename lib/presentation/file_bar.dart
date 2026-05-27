@@ -8,9 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _kLastDirectoryKey = 'last_file_directory';
 
 class FileBar extends StatefulWidget {
-  const FileBar({super.key, this.onFileSelected});
+  const FileBar({super.key, this.onFileSelected, this.trailing});
 
   final ValueChanged<String>? onFileSelected;
+  final Widget? trailing;
 
   @override
   State<FileBar> createState() => _FileBarState();
@@ -63,48 +64,55 @@ class _FileBarState extends State<FileBar> {
           bottom: BorderSide(color: Colors.black.withValues(alpha: .08)),
         ),
       ),
-      child: fileNameDisplay(colorScheme),
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 4,
+          children: [
+            fileNameDisplay(colorScheme),
+            if (widget.trailing != null) widget.trailing!,
+          ],
+        ),
+      ),
     );
   }
 
   Widget fileNameDisplay(ColorScheme colorScheme) {
-    return Center(
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovering = true),
-        onExit: (_) => setState(() => _isHovering = false),
-        child: GestureDetector(
-          onTap: _pickFile,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 800),
-            height: 26,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: _isHovering ? colorScheme.primary.withValues(alpha: 0.02) : Colors.white,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: _isHovering ? colorScheme.primary.withValues(alpha: 0.15) : Colors.black.withValues(alpha: .08),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: GestureDetector(
+        onTap: _pickFile,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 800),
+          height: 26,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: _isHovering ? colorScheme.primary.withValues(alpha: 0.02) : Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: _isHovering ? colorScheme.primary.withValues(alpha: 0.15) : Colors.black.withValues(alpha: .08),
+            ),
+          ),
+          child: Row(
+            spacing: 8,
+            mainAxisAlignment: .center,
+            children: [
+              Icon(
+                Icons.insert_drive_file_outlined,
+                size: 18,
+                color: _fileName != null ? colorScheme.primary : Colors.black54,
               ),
-            ),
-            child: Row(
-              spacing: 8,
-              mainAxisAlignment: .center,
-              children: [
-                Icon(
-                  Icons.insert_drive_file_outlined,
-                  size: 18,
-                  color: _fileName != null ? colorScheme.primary : Colors.black54,
+              Text(
+                _fileName ?? 'No file selected',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _fileName != null ? colorScheme.onSurface : Colors.black54,
                 ),
-                Text(
-                  _fileName ?? 'No file selected',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: _fileName != null ? colorScheme.onSurface : Colors.black54,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
