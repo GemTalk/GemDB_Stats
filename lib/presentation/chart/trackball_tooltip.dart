@@ -9,7 +9,7 @@ class TrackballTooltip extends StatelessWidget {
   });
 
   final DateTime timestamp;
-  final List<({String name, int value, Color color})> entries;
+  final List<({String name, num value, Color color})> entries;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +57,7 @@ class TrackballTooltip extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '${entry.name} : ${entry.value}',
+                      '${entry.name} : ${entry.value is double ? (entry.value as double).toStringAsFixed(3) : entry.value}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,

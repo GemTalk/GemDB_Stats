@@ -242,7 +242,7 @@ class DataManager {
           final stat = existingProcess.type.statistics[statIdx];
 
           existingProcess.statisticData[stat.name]!.points.add(
-            DataPoint(timestamp: timestamp, value: int.tryParse(parts[statIdx + 6]) ?? 0),
+            DataPoint(timestamp: timestamp, value: _parseStatValue(parts[statIdx + 6], stat.type)),
           );
         }
       } else {
@@ -263,7 +263,7 @@ class DataManager {
 
           newProcess.statisticData[stat.name] = TimeSeries(
             statistic: stat,
-            points: [DataPoint(timestamp: timestamp, value: int.tryParse(parts[statIdx + 6]) ?? 0)],
+            points: [DataPoint(timestamp: timestamp, value: _parseStatValue(parts[statIdx + 6], stat.type))],
           );
         }
 
@@ -299,3 +299,22 @@ class DataManager {
 }
 
 typedef _ParseArgs = ({SendPort sendPort, String content, Map<String, Statistic> statistics});
+
+/// Parses a raw string value from the data file into the correct [num] type.
+///
+/// For "float" statistics the file stores the IEEE 754 bit pattern of a
+/// 32-bit float as a plain integer string. We parse that integer and then
+/// reinterpret its lower 32 bits as a [double] via [ByteData]. All other
+/// statistic types are stored as regular integers.
+num _parseStatValue(String raw, String type) {
+  if (type == 'float') {
+    final bits = int.tryParse(raw);
+    if (bits == null) {
+      return 0.0;
+    }
+    final bd = ByteData(4);
+    bd.setUint32(0, bits & 0xFFFFFFFF);
+    return bd.getFloat32(0);
+  }
+  return int.tryParse(raw) ?? 0;
+}

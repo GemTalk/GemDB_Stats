@@ -10,7 +10,7 @@ class ToolIconButton extends StatefulWidget {
     this.isActive = false,
   });
 
-  final IconData icon;
+  final FaIconData icon;
   final VoidCallback onTap;
   final String? tooltip;
   final bool isActive;

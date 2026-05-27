@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:vsd/domain/models/time_series.dart';
 import 'package:vsd/presentation/chart/chart_crosshair.dart';
-import 'package:vsd/presentation/chart/trackball_tooltip.dart';
+import 'package:vsd/presentation/chart/chart_utils.dart';
 
 // Matches Cristalyse's default ChartTheme.defaultTheme() colorPalette order.
 const List<Color> kMultiChartPalette = [
@@ -21,10 +21,6 @@ const List<Color> kMultiChartPalette = [
   Colors.cyan,
   Colors.lime,
 ];
-
-// theme.padding.top is always 16px — used for tooltip and dot Y calibration.
-const double _kPlotTop = 16.0;
-const double _kTooltipWidth = 170.0;
 
 // Matches Cristalyse's internal axis-label text style (ChartTheme.defaultTheme).
 const TextStyle _kAxisStyle = TextStyle(fontSize: 12, color: Colors.black);
@@ -77,7 +73,7 @@ class MultiStatisticLineChart extends StatefulWidget {
 class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   DataPointInfo? _hover;
 
-  List<({String name, int value, Color color})> _findHoveredEntries(
+  List<({String name, num value, Color color})> _findHoveredEntries(
     double dataX,
     List<({String name, List<DataPoint> points})> allValid,
   ) {
@@ -92,12 +88,11 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     }).toList();
   }
 
-  int _computePadding(int range) {
-    final computed = (range * 0.1).ceil();
-    return computed < 2 ? 2 : computed;
+  num _computePadding(num range) {
+    return range > 0 ? range * 0.1 : 1.0;
   }
 
-  ({int displayMin, int displayMax, List<double> ticks}) _yBounds(
+  ({num displayMin, num displayMax, List<double> ticks}) _yBounds(
     List<({String name, List<DataPoint> points})> series,
   ) {
     final allY = series.expand((s) => s.points).map((p) => p.value).toList();
@@ -106,7 +101,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     final padding = _computePadding(maxY - minY);
     final displayMin = minY >= 0 ? (minY - padding).clamp(0, minY) : minY - padding;
     final displayMax = maxY + padding;
-    return (displayMin: displayMin, displayMax: displayMax, ticks: _buildIntegerTicks(displayMin, displayMax));
+    return (displayMin: displayMin, displayMax: displayMax, ticks: buildChartTicks(displayMin, displayMax));
   }
 
   /// Replicates Cristalyse's internal plot-area computation so our CustomPaint
@@ -158,9 +153,9 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
 
     return Rect.fromLTWH(
       leftPad,
-      _kPlotTop,
+      kChartPlotTop,
       size.width - leftPad - rightPad,
-      size.height - _kPlotTop - bottomPad,
+      size.height - kChartPlotTop - bottomPad,
     );
   }
 
@@ -170,12 +165,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     final validSecondary = widget.secondarySeries.where((s) => s.points.length >= 2).toList();
 
     if (validPrimary.isEmpty && validSecondary.isEmpty) {
-      return const Center(
-        child: Text(
-          'Not enough data',
-          style: TextStyle(fontSize: 12, color: Colors.black45),
-        ),
-      );
+      return kNotEnoughDataWidget;
     }
 
     final timeFormatter = DateFormat('HH:mm:ss');
@@ -227,7 +217,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           max: maxX,
         )
         .scaleYContinuous(
-          labels: (value) => value.round().toString(),
+          labels: chartTickFormatter(bounds.ticks),
           min: bounds.displayMin.toDouble(),
           max: bounds.displayMax.toDouble(),
           tickConfig: TickConfig(ticks: bounds.ticks),
@@ -245,7 +235,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
       builder: (context, constraints) {
         final size = constraints.biggest;
 
-        List<({String name, int value, Color color})>? hoveredEntries;
+        List<({String name, num value, Color color})>? hoveredEntries;
         DateTime? hoveredTimestamp;
         double? crosshairX;
         List<({Offset position, Color color})> dots = const [];
@@ -263,7 +253,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           if (yRange > 0) {
             final detectedYT = 1.0 - (detectedValue - bounds.displayMin) / yRange;
             if (detectedYT.abs() > 0.02) {
-              actualPlotHeight = (detectedScreenY - _kPlotTop) / detectedYT;
+              actualPlotHeight = (detectedScreenY - kChartPlotTop) / detectedYT;
             }
           }
 
@@ -271,7 +261,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
             double dotY;
             if (actualPlotHeight != null && yRange > 0) {
               final entryYT = 1.0 - (entry.value - bounds.displayMin) / yRange;
-              dotY = _kPlotTop + entryYT * actualPlotHeight;
+              dotY = kChartPlotTop + entryYT * actualPlotHeight;
             } else {
               dotY = detectedScreenY;
             }
@@ -292,7 +282,12 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
                 ),
               ),
             if (hoveredEntries != null && hoveredTimestamp != null && crosshairX != null)
-              _positionedTooltip(hoveredEntries, hoveredTimestamp, crosshairX, size),
+              buildPositionedTooltip(
+                entries: hoveredEntries,
+                timestamp: hoveredTimestamp,
+                crosshairX: crosshairX,
+                size: size,
+              ),
           ],
         );
       },
@@ -356,13 +351,13 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           max: maxX,
         )
         .scaleYContinuous(
-          labels: (value) => value.round().toString(),
+          labels: chartTickFormatter(primaryBounds.ticks),
           min: primaryBounds.displayMin.toDouble(),
           max: primaryBounds.displayMax.toDouble(),
           tickConfig: TickConfig(ticks: primaryBounds.ticks),
         )
         .scaleY2Continuous(
-          labels: (value) => value.round().toString(),
+          labels: chartTickFormatter(secondaryBounds.ticks),
           min: secondaryBounds.displayMin.toDouble(),
           max: secondaryBounds.displayMax.toDouble(),
           tickConfig: TickConfig(ticks: secondaryBounds.ticks),
@@ -385,7 +380,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         final size = constraints.biggest;
         final plotArea = _computePlotArea(size, primaryBounds.ticks, secondaryBounds.ticks, sampleXLabel);
 
-        List<({String name, int value, Color color})>? hoveredEntries;
+        List<({String name, num value, Color color})>? hoveredEntries;
         DateTime? hoveredTimestamp;
         double? crosshairX;
         List<({Offset position, Color color})> dots = const [];
@@ -406,7 +401,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           if (detectedYRange > 0) {
             final detectedYT = 1.0 - (detectedValue - detectedBounds.displayMin) / detectedYRange;
             if (detectedYT.abs() > 0.02) {
-              actualPlotHeight = (detectedScreenY - _kPlotTop) / detectedYT;
+              actualPlotHeight = (detectedScreenY - kChartPlotTop) / detectedYT;
             }
           }
 
@@ -418,7 +413,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
             double dotY;
             if (actualPlotHeight != null && yRange > 0) {
               final entryYT = 1.0 - (entry.value - b.displayMin) / yRange;
-              dotY = _kPlotTop + entryYT * actualPlotHeight;
+              dotY = kChartPlotTop + entryYT * actualPlotHeight;
             } else {
               dotY = detectedScreenY;
             }
@@ -456,50 +451,16 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
                 ),
               ),
             if (hoveredEntries != null && hoveredTimestamp != null && crosshairX != null)
-              _positionedTooltip(hoveredEntries, hoveredTimestamp, crosshairX, size),
+              buildPositionedTooltip(
+                entries: hoveredEntries,
+                timestamp: hoveredTimestamp,
+                crosshairX: crosshairX,
+                size: size,
+              ),
           ],
         );
       },
     );
-  }
-
-  Widget _positionedTooltip(
-    List<({String name, int value, Color color})> entries,
-    DateTime timestamp,
-    double crosshairX,
-    Size size,
-  ) {
-    final left = (crosshairX + 12 + _kTooltipWidth > size.width) ? crosshairX - _kTooltipWidth - 12 : crosshairX + 12;
-
-    return Positioned(
-      left: left,
-      top: _kPlotTop,
-      child: IgnorePointer(
-        child: TrackballTooltip(
-          timestamp: timestamp,
-          entries: entries,
-        ),
-      ),
-    );
-  }
-
-  List<double> _buildIntegerTicks(int min, int max) {
-    final span = max - min;
-    if (span <= 0) {
-      return [min.toDouble()];
-    }
-    if (span <= 6) {
-      return List.generate(span + 1, (i) => (min + i).toDouble());
-    }
-    final step = (span / 5).ceil();
-    final ticks = <double>[];
-    for (int v = min; v <= max; v += step) {
-      ticks.add(v.toDouble());
-    }
-    if (ticks.last != max.toDouble()) {
-      ticks.add(max.toDouble());
-    }
-    return ticks;
   }
 }
 
@@ -519,8 +480,8 @@ class _DashedLinesPainter extends CustomPainter {
   final Rect plotArea;
   final double minX;
   final double maxX;
-  final int displayMin;
-  final int displayMax;
+  final num displayMin;
+  final num displayMax;
 
   @override
   void paint(Canvas canvas, Size size) {

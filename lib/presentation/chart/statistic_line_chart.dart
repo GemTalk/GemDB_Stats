@@ -3,11 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:vsd/domain/models/time_series.dart';
 import 'package:vsd/presentation/chart/chart_crosshair.dart';
-import 'package:vsd/presentation/chart/trackball_tooltip.dart';
-
-// theme.padding.top is a constant 16px — used for tooltip vertical positioning only.
-const double _kPlotTop = 16.0;
-const double _kTooltipWidth = 170.0;
+import 'package:vsd/presentation/chart/chart_utils.dart';
 
 class StatisticLineChart extends StatefulWidget {
   const StatisticLineChart({
@@ -39,12 +35,7 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
   @override
   Widget build(BuildContext context) {
     if (widget.points.length < 2) {
-      return const Center(
-        child: Text(
-          'Not enough data',
-          style: TextStyle(fontSize: 12, color: Colors.black45),
-        ),
-      );
+      return kNotEnoughDataWidget;
     }
 
     final timeFormatter = DateFormat('HH:mm:ss');
@@ -52,11 +43,10 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
     final minY = yValues.reduce((a, b) => a < b ? a : b);
     final maxY = yValues.reduce((a, b) => a > b ? a : b);
     final range = maxY - minY;
-    final computedPadding = (range * 0.1).ceil();
-    final padding = computedPadding < 2 ? 2 : computedPadding;
+    final padding = range > 0 ? range * 0.1 : 1.0;
     final displayMinY = minY >= 0 ? (minY - padding).clamp(0, minY) : minY - padding;
     final displayMaxY = maxY + padding;
-    final yTicks = _buildIntegerTicks(displayMinY, displayMaxY);
+    final yTicks = buildChartTicks(displayMinY, displayMaxY);
 
     final minX = widget.points.first.timestamp.millisecondsSinceEpoch.toDouble();
     final maxX = widget.points.last.timestamp.millisecondsSinceEpoch.toDouble();
@@ -83,7 +73,7 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
           max: maxX,
         )
         .scaleYContinuous(
-          labels: (value) => value.round().toString(),
+          labels: chartTickFormatter(yTicks),
           min: displayMinY.toDouble(),
           max: displayMaxY.toDouble(),
           tickConfig: TickConfig(ticks: yTicks),
@@ -127,52 +117,21 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
                 ),
               ),
             if (hoveredPoint != null && crosshairX != null)
-              _positionedTooltip(hoveredPoint, crosshairX, size),
+              buildPositionedTooltip(
+                entries: [
+                  (
+                    name: widget.statisticName,
+                    value: hoveredPoint.value,
+                    color: const Color(0xFF0078A8),
+                  ),
+                ],
+                timestamp: hoveredPoint.timestamp,
+                crosshairX: crosshairX,
+                size: size,
+              ),
           ],
         );
       },
     );
-  }
-
-  Widget _positionedTooltip(DataPoint point, double crosshairX, Size size) {
-    final left = (crosshairX + 12 + _kTooltipWidth > size.width)
-        ? crosshairX - _kTooltipWidth - 12
-        : crosshairX + 12;
-
-    return Positioned(
-      left: left,
-      top: _kPlotTop,
-      child: IgnorePointer(
-        child: TrackballTooltip(
-          timestamp: point.timestamp,
-          entries: [
-            (
-              name: widget.statisticName,
-              value: point.value,
-              color: const Color(0xFF0078A8),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<double> _buildIntegerTicks(int min, int max) {
-    final span = max - min;
-    if (span <= 0) {
-      return [min.toDouble()];
-    }
-    if (span <= 6) {
-      return List.generate(span + 1, (index) => (min + index).toDouble());
-    }
-    final step = (span / 5).ceil();
-    final ticks = <double>[];
-    for (int value = min; value <= max; value += step) {
-      ticks.add(value.toDouble());
-    }
-    if (ticks.last != max.toDouble()) {
-      ticks.add(max.toDouble());
-    }
-    return ticks;
   }
 }
