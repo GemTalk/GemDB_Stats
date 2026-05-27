@@ -7,8 +7,8 @@ import 'package:vsd/domain/models/statistic.dart';
 import 'package:vsd/presentation/_reusable_components/case_insensitive_text_type.dart';
 import 'package:vsd/presentation/_reusable_components/pulldown_button.dart';
 import 'package:vsd/presentation/_reusable_components/search_bar.dart';
+import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
-import 'package:vsd/presentation/statistics_table/tool_icon_button.dart';
 
 class StatisticsTable extends StatefulWidget {
   const StatisticsTable({
