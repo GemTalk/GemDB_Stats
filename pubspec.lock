@@ -806,10 +806,10 @@ packages:
     dependency: "direct main"
     description:
       name: streamdown
-      sha256: "91063c9ba825fe82d3fd4e2428d035690c4337bf9cfee307279b0404588973e3"
+      sha256: fe430a33ddc45f0653eb74846e93a03d42ca8ea3d8a590a2e87b5a2428a63e20
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.0"
+    version: "0.1.1"
   string_scanner:
     dependency: transitive
     description:

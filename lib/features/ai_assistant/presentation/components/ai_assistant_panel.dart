@@ -8,7 +8,6 @@ import 'package:vsd/features/ai_assistant/domain/models/ai_message.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_stream_events.dart';
 import 'package:vsd/features/ai_assistant/presentation/components/ai_key_setup_view.dart';
 import 'package:vsd/features/ai_assistant/presentation/components/ai_messages_body.dart';
-import 'package:vsd/features/ai_assistant/presentation/components/current_tool_display.dart';
 import 'package:vsd/features/ai_assistant/presentation/components/input_box.dart';
 import 'package:vsd/features/ai_assistant/presentation/utils/replay_stream_controller.dart';
 import 'package:vsd/features/mcp/vsd_mcp_server.dart';
@@ -40,7 +39,6 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
   // ------- Conversation state -------
   final List<AiMessage> _messages = [];
   bool _isSending = false;
-  String? _toolActivity;
   StreamSubscription<AiStreamEvent>? _activeSub;
   ReplayStreamController? _currentStreamController;
 
@@ -144,7 +142,6 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
         ),
       );
       _isSending = true;
-      _toolActivity = null;
     });
 
     _activeSub = _aiService!
@@ -162,7 +159,29 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
                   _messages[_messages.length - 1] = last.copyWith(text: last.text + text);
                 });
               case AiToolActivity(:final message):
-                setState(() => _toolActivity = message);
+                final last = _messages.last;
+                if (last.text.isNotEmpty) {
+                  // Text was already streamed this iteration — finalize that segment,
+                  // append the tool call, then start a fresh streaming bubble so the
+                  // next iteration's text appears after the tool call in the history.
+                  final oldController = _currentStreamController!;
+                  _currentStreamController = ReplayStreamController();
+                  unawaited(oldController.close());
+                  setState(() {
+                    _messages[_messages.length - 1] = last.copyWith(isStreaming: false, isIntermediate: true);
+                    _messages.add(AiMessage.toolCall(message));
+                    _messages.add(AiMessage(
+                      text: '',
+                      isUser: false,
+                      isStreaming: true,
+                      stream: _currentStreamController!.stream,
+                    ));
+                  });
+                } else {
+                  setState(() {
+                    _messages.insert(_messages.length - 1, AiMessage.toolCall(message));
+                  });
+                }
               case AiDone():
                 _finishStreaming();
               case AiError(:final message, :final isAuthError):
@@ -207,13 +226,19 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
     _currentStreamController = null;
     setState(() {
       _isSending = false;
-      _toolActivity = null;
       if (_messages.isNotEmpty && !_messages.last.isUser) {
         final last = _messages.last;
-        final finalText = errorText != null
-            ? (last.text.isEmpty ? '⚠ $errorText' : last.text)
-            : (last.text.isEmpty ? '(no response)' : last.text);
-        _messages[_messages.length - 1] = last.copyWith(text: finalText, isStreaming: false);
+        final hasPriorContent = _messages.length >= 2 && !_messages[_messages.length - 2].isUser;
+        if (errorText != null) {
+          final finalText = last.text.isEmpty ? '⚠ $errorText' : last.text;
+          _messages[_messages.length - 1] = last.copyWith(text: finalText, isStreaming: false);
+        } else if (last.text.isEmpty && hasPriorContent) {
+          // Empty placeholder left after tool calls — remove it.
+          _messages.removeLast();
+        } else {
+          final finalText = last.text.isEmpty ? '(no response)' : last.text;
+          _messages[_messages.length - 1] = last.copyWith(text: finalText, isStreaming: false);
+        }
       }
     });
   }
@@ -240,7 +265,6 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
                   ),
           ),
           if (!_keySetupMode) ...[
-            if (_toolActivity != null) CurrentToolDisplay(toolActivity: _toolActivity),
             InputBox(onSend: _sendMessage, ready: _servicesReady, isSending: _isSending),
           ],
         ],

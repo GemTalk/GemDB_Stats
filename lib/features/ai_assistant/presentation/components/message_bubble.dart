@@ -11,6 +11,10 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.toolActivity != null) {
+      return toolActivityDisplay();
+    }
+
     final showTyping = !message.isUser && message.isStreaming && message.text.isEmpty;
 
     Widget content;
@@ -26,7 +30,7 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    final showCopyButton = !message.isUser && !message.isStreaming;
+    final showCopyButton = !message.isUser && !message.isStreaming && !message.isIntermediate;
 
     return Align(
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -51,6 +55,26 @@ class MessageBubble extends StatelessWidget {
                 ],
               )
             : content,
+      ),
+    );
+  }
+
+  Padding toolActivityDisplay() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.construction, size: 11, color: Colors.black38),
+          const SizedBox(width: 4),
+          Text(
+            message.toolActivity!,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.black45,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
       ),
     );
   }

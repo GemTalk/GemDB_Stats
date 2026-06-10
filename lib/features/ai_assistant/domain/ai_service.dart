@@ -203,10 +203,25 @@ class AiService {
   /// Only completed user+assistant pairs are included.
   /// At most 10 pairs (20 messages) are kept to limit token usage.
   List<anthropic.InputMessage> _historyToMessages(List<AiMessage> history) {
+    // Remove tool-call entries and merge consecutive assistant segments so each
+    // user turn maps to exactly one assistant entry for the Anthropic history.
+    final merged = <AiMessage>[];
+    for (final msg in history) {
+      if (msg.toolActivity != null) {
+        continue;
+      }
+      if (!msg.isUser && merged.isNotEmpty && !merged.last.isUser) {
+        final prev = merged.last;
+        merged[merged.length - 1] = prev.copyWith(text: '${prev.text}\n\n${msg.text}');
+      } else {
+        merged.add(msg);
+      }
+    }
+
     final pairs = <(AiMessage, AiMessage)>[];
-    for (var i = 0; i + 1 < history.length; i += 2) {
-      final user = history[i];
-      final asst = history[i + 1];
+    for (var i = 0; i + 1 < merged.length; i += 2) {
+      final user = merged[i];
+      final asst = merged[i + 1];
       if (user.isUser && !asst.isUser && asst.text.isNotEmpty) {
         pairs.add((user, asst));
       }
