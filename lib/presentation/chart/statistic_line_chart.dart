@@ -20,9 +20,7 @@ class StatisticLineChart extends StatefulWidget {
 }
 
 class _StatisticLineChartState extends State<StatisticLineChart> {
-  // Populated by Cristalyse's own HoverConfig — screenPosition is computed
-  // from the painter's actual plotArea, not our estimated constants.
-  DataPointInfo? _hover;
+  double? _mouseX;
 
   DataPoint _nearestPoint(double dataX) {
     return widget.points.reduce((a, b) {
@@ -78,60 +76,63 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
           max: displayMaxY.toDouble(),
           tickConfig: TickConfig(ticks: yTicks),
         )
-        .interaction(
-          hover: HoverConfig(
-            // Large radius so a point is always found while hovering.
-            hitTestRadius: 10000,
-            onHover: (p) => setState(() => _hover = p),
-            onExit: (_) => setState(() => _hover = null),
-          ),
-        )
         .build();
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = constraints.biggest;
-        final crosshairX = _hover?.screenPosition.dx;
+    final sampleXLabel = timeFormatter.format(widget.points.last.timestamp);
 
-        // screenPosition comes from Cristalyse's painter - it's on the actual line.
-        final dots = _hover != null
-            ? <({Offset position, Color color})>[
-                (position: _hover!.screenPosition, color: const Color(0xFF0078A8)),
-              ]
-            : const <({Offset position, Color color})>[];
+    return MouseRegion(
+      onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
+      onExit: (_) => setState(() => _mouseX = null),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = constraints.biggest;
+          final plotRect = computePlotRect(size, yTicks, [], sampleXLabel);
 
-        final hoveredPoint = _hover != null
-            ? _nearestPoint((_hover!.xValue as num).toDouble())
-            : null;
+          double? crosshairX;
+          DataPoint? hoveredPoint;
+          List<({Offset position, Color color})> dots = const [];
 
-        return Stack(
-          children: [
-            chart,
-            if (crosshairX != null)
-              IgnorePointer(
-                child: SizedBox.fromSize(
-                  size: size,
-                  child: CustomPaint(
-                    painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
+          if (_mouseX != null && plotRect.width > 0) {
+            final dataX = minX + (_mouseX! - plotRect.left) / plotRect.width * (maxX - minX);
+            hoveredPoint = _nearestPoint(dataX);
+            final snappedMs = hoveredPoint.timestamp.millisecondsSinceEpoch.toDouble();
+            crosshairX = plotRect.left + (snappedMs - minX) / (maxX - minX) * plotRect.width;
+            final yRange = displayMaxY - displayMinY;
+            final dotY = yRange > 0
+                ? plotRect.top + (1.0 - (hoveredPoint.value - displayMinY) / yRange) * plotRect.height
+                : plotRect.top + plotRect.height / 2;
+            dots = [(position: Offset(crosshairX, dotY), color: const Color(0xFF0078A8))];
+          }
+
+          return Stack(
+            children: [
+              chart,
+              if (crosshairX != null)
+                IgnorePointer(
+                  child: SizedBox.fromSize(
+                    size: size,
+                    child: CustomPaint(
+                      painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
+                    ),
                   ),
                 ),
-              ),
-            if (hoveredPoint != null && crosshairX != null)
-              buildPositionedTooltip(
-                entries: [
-                  (
-                    name: widget.statisticName,
-                    value: hoveredPoint.value,
-                    color: const Color(0xFF0078A8),
-                  ),
-                ],
-                timestamp: hoveredPoint.timestamp,
-                crosshairX: crosshairX,
-                size: size,
-              ),
-          ],
-        );
-      },
+              if (hoveredPoint != null && crosshairX != null)
+                buildPositionedTooltip(
+                  entries: [
+                    (
+                      name: widget.statisticName,
+                      value: hoveredPoint.value,
+                      color: const Color(0xFF0078A8),
+                    ),
+                  ],
+                  timestamp: hoveredPoint.timestamp,
+                  crosshairX: crosshairX,
+                  size: size,
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -59,6 +60,58 @@ List<double> buildChartTicks(num min, num max) {
   return List.generate(
     count.clamp(1, 20),
     (i) => (firstTick + i * niceStep).toDouble(),
+  );
+}
+
+/// Replicates Cristalyse's internal plot-area layout so CustomPaint overlays
+/// align pixel-perfectly with the chart canvas.
+///
+/// Pass [secondaryTicks] as an empty list for single-axis charts.
+Rect computePlotRect(
+  Size size,
+  List<double> primaryTicks,
+  List<double> secondaryTicks,
+  String sampleXLabel,
+) {
+  double maxLabelW(List<double> ticks) {
+    if (ticks.isEmpty) {
+      return 0.0;
+    }
+    final fmt = chartTickFormatter(ticks);
+    var w = 0.0;
+    for (final t in ticks) {
+      final tp = TextPainter(
+        text: TextSpan(text: fmt(t), style: const TextStyle(fontSize: 12)),
+        textDirection: ui.TextDirection.ltr,
+      )..layout();
+      w = math.max(w, tp.width);
+    }
+    return w;
+  }
+
+  final xTp = TextPainter(
+    text: TextSpan(text: sampleXLabel, style: const TextStyle(fontSize: 12)),
+    textDirection: ui.TextDirection.ltr,
+  )..layout();
+
+  const base = 8.0;   // theme.padding
+  const axisW = 2.0;  // axisWidth * 2 (tick extent)
+  const tickG = 4.0;  // tickToLabelSpacing
+  const l2t = 8.0;    // _labelToTitleSpacing
+  const tfs = 13.0;   // title font size (axisLabelStyle.fontSize + 1)
+
+  final leftPad = base + axisW + tickG + maxLabelW(primaryTicks);
+  // Single-axis: right side has no secondary axis, only base padding.
+  final rightPad = secondaryTicks.isEmpty
+      ? base
+      : base + axisW + tickG + maxLabelW(secondaryTicks);
+  final bottomPad = base + axisW + tickG + xTp.height + l2t + tfs;
+
+  return Rect.fromLTWH(
+    leftPad,
+    kChartPlotTop,
+    size.width - leftPad - rightPad,
+    size.height - kChartPlotTop - bottomPad,
   );
 }
 
