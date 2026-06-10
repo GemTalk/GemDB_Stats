@@ -22,6 +22,7 @@ class AiDone extends AiStreamEvent {
 
 /// Signals an error (network, auth, etc.).
 class AiError extends AiStreamEvent {
-  const AiError(this.message);
+  const AiError(this.message, {this.isAuthError = false});
   final String message;
+  final bool isAuthError;
 }

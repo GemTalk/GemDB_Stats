@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:vsd/domain/data_manager.dart';
 import 'package:vsd/presentation/home_page.dart';
@@ -7,7 +6,6 @@ import 'package:vsd/theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
   await DataManager().loadStatistics();
   runApp(const MainApp());
 }

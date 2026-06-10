@@ -1,5 +1,4 @@
 import 'package:anthropic_sdk_dart/anthropic_sdk_dart.dart' as anthropic;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mcp_dart/mcp_dart.dart' as mcp;
 import 'package:vsd/domain/data_manager.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_message.dart';
@@ -16,13 +15,9 @@ import 'package:vsd/features/mcp/vsd_mcp_server.dart';
 /// 2. Call [chat] for each user turn; subscribe to the returned stream.
 /// 3. Call [dispose] when done.
 class AiService {
-  AiService(this._mcpServer) {
-    final apiKey = dotenv.env['ANTHROPIC_API_KEY'];
-    if (apiKey == null || apiKey.trim().isEmpty || apiKey == 'sk-ant-YOUR_KEY_HERE') {
-      throw StateError(
-        'ANTHROPIC_API_KEY is not configured. '
-        'Edit the .env file in the project root and add your key.',
-      );
+  AiService(this._mcpServer, String apiKey) {
+    if (apiKey.trim().isEmpty) {
+      throw StateError('API key is empty.');
     }
     _client = anthropic.AnthropicClient(
       config: anthropic.AnthropicConfig(
@@ -157,7 +152,8 @@ class AiService {
       yield const AiDone();
     } on anthropic.AuthenticationException {
       yield const AiError(
-        'Invalid API key. Check your .env file.',
+        'Invalid or unauthorized API key.',
+        isAuthError: true,
       );
     } on anthropic.RateLimitException {
       yield const AiError(
