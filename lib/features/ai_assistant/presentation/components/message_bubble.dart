@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:streamdown/streamdown.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_message.dart';
+import 'package:vsd/features/ai_assistant/presentation/components/copy_button.dart';
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({required this.message, required this.index, super.key});
@@ -25,6 +26,8 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    final showCopyButton = !message.isUser && !message.isStreaming;
+
     return Align(
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -35,7 +38,19 @@ class MessageBubble extends StatelessWidget {
           color: message.isUser ? const Color(0xFFDCF5FF) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: content,
+        child: showCopyButton
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 8,
+                children: [
+                  content,
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: CopyButton(text: message.text),
+                  ),
+                ],
+              )
+            : content,
       ),
     );
   }
