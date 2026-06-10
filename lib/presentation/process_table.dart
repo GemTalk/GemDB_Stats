@@ -147,7 +147,7 @@ class _ProcessTableState extends State<ProcessTable> {
             enableCellBorderVertical: false,
             activatedBorderColor: Colors.transparent,
             gridBorderColor: Colors.transparent,
-            iconSize: 0,
+            iconColor: Colors.transparent,
           ),
           columnSize: PlutoGridColumnSizeConfig(resizeMode: PlutoResizeMode.normal),
           enterKeyAction: PlutoGridEnterKeyAction.toggleEditing,

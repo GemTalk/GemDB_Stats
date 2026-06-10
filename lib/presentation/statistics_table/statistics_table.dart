@@ -355,7 +355,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
                   enableCellBorderVertical: false,
                   activatedBorderColor: Colors.transparent,
                   gridBorderColor: Colors.transparent,
-                  iconSize: 0,
+                  iconColor: Colors.transparent,
                 ),
                 columnSize: const PlutoGridColumnSizeConfig(resizeMode: PlutoResizeMode.normal),
                 enterKeyAction: PlutoGridEnterKeyAction.toggleEditing,
