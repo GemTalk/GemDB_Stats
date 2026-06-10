@@ -23,7 +23,7 @@ class DataManager {
     return processes.values.expand((list) => list).toList();
   }
 
-  /// Load and parse data from .out file content
+  /// Load and parse data from statmon file content
   Future<void> loadFromContent(String content, {void Function(double)? onProgress}) async {
     statTypes.clear();
     processes.clear();
@@ -35,7 +35,7 @@ class DataManager {
         try {
           final content = args.content;
           if (!content.contains('ENDHEADER')) {
-            args.sendPort.send('Not a valid .out file: missing ENDHEADER');
+            args.sendPort.send('Not a valid statmon file: missing ENDHEADER');
             return;
           }
           args.sendPort.send(0.05);

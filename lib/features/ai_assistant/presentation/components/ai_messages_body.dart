@@ -49,7 +49,7 @@ class AiMessagesBody extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            'Open a .out file to start analyzing your data.',
+            'Open a statmon file to start analyzing your data.',
             style: TextStyle(fontSize: 13, color: Colors.black45),
             textAlign: TextAlign.center,
           ),

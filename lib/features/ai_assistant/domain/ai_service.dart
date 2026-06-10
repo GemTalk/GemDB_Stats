@@ -254,7 +254,7 @@ class AiService {
       ..writeln(
         'You are an analytics assistant for VSD (Virtual Statistics Display), '
         'a performance monitoring tool for GemStone Smalltalk processes. '
-        'You help users understand process performance data loaded from .out files.',
+        'You help users understand process performance data loaded from statmon files.',
       );
 
     if (dm.allProcesses.isEmpty) {
@@ -262,7 +262,7 @@ class AiService {
         ..writeln()
         ..writeln(
           'No data is currently loaded. If the user asks questions about data, '
-          'tell them to load a .out file first using the file picker at the top of the app.',
+          'tell them to load a statmon file first using the file picker at the top of the app.',
         );
       return buf.toString();
     }

@@ -6,7 +6,7 @@ Map<String, dynamic> executeListProcesses() {
   if (dm.allProcesses.isEmpty) {
     return {
       'processes': <Map<String, dynamic>>[],
-      'message': 'No data loaded. Open a .out file first.',
+      'message': 'No data loaded. Open a statmon file first.',
     };
   }
   return {
@@ -76,7 +76,7 @@ Map<String, dynamic> executeGetProcessDetails({
 Map<String, dynamic> executeGetDatasetOverview() {
   final dm = DataManager();
   if (dm.allProcesses.isEmpty) {
-    return {'message': 'No data loaded. Open a .out file first.'};
+    return {'message': 'No data loaded. Open a statmon file first.'};
   }
 
   final allTimes = dm.allProcesses.expand((p) => [p.startTime, p.endTime]).toList();
