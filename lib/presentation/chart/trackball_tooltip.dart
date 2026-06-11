@@ -11,6 +11,10 @@ class TrackballTooltip extends StatelessWidget {
   final DateTime timestamp;
   final List<({String name, num value, Color color})> entries;
 
+  static String _formatValue(num value) => value is double
+      ? NumberFormat('#,##0.000').format(value)
+      : NumberFormat('#,##0').format(value);
+
   @override
   Widget build(BuildContext context) {
     final timeLabel = DateFormat('MMM d yyyy HH:mm:ss').format(timestamp);
@@ -57,7 +61,7 @@ class TrackballTooltip extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '${entry.name} : ${entry.value is double ? (entry.value as double).toStringAsFixed(3) : entry.value}',
+                      '${entry.name} : ${_formatValue(entry.value)}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
