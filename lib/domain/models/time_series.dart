@@ -17,6 +17,7 @@ class TimeSeries {
   TimeSeries({required this.statistic});
 
   Statistic statistic;
+  // Timestamps are pre-shifted to the file's recorded timezone and exposed as UTC DateTimes.
   final Int64Buffer _timestampsMs = Int64Buffer();
   final Float64Buffer _values = Float64Buffer();
 
@@ -59,9 +60,9 @@ class _PointsView extends ListBase<DataPoint> {
 
   @override
   DataPoint operator [](int index) => DataPoint(
-        timestamp: DateTime.fromMillisecondsSinceEpoch(_series._timestampsMs[index]),
-        value: _series._asNum(_series._values[index]),
-      );
+    timestamp: DateTime.fromMillisecondsSinceEpoch(_series._timestampsMs[index], isUtc: true),
+    value: _series._asNum(_series._values[index]),
+  );
 
   @override
   set length(int newLength) => throw UnsupportedError('TimeSeries.points is read-only');

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/services.dart';
+import 'package:vsd/domain/models/file_time.dart';
 import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/domain/models/stat_type.dart';
 import 'package:vsd/domain/models/statistic.dart';
@@ -29,6 +30,7 @@ class DataManager {
   Future<void> loadFromFile(String path, {void Function(double)? onProgress}) async {
     statTypes.clear();
     processes.clear();
+    FileTime.utcOffsetMs = 0;
 
     // Use an isolate to read, decompress and parse the file without blocking the UI
     final receivePort = ReceivePort();
@@ -45,14 +47,19 @@ class DataManager {
           args.sendPort.send(0.05);
           final parsedStatTypes = parseStatTypes(content, args.statistics);
           args.sendPort.send(0.1);
-          final parsedProcesses = _parseProcesses(
+          final parsed = _parseProcesses(
             content,
             parsedStatTypes,
+            utcOffsetMs: parseUtcOffsetMs(content),
             onProgress: (p) => args.sendPort.send(0.1 + 0.9 * p),
           );
           // Isolate.exit transfers ownership of the result without copying it,
           // unlike sendPort.send which deep-copies the whole object graph.
-          Isolate.exit(args.sendPort, (statTypes: parsedStatTypes, processes: parsedProcesses));
+          Isolate.exit(args.sendPort, (
+            statTypes: parsedStatTypes,
+            processes: parsed.processes,
+            utcOffsetMs: parsed.utcOffsetMs,
+          ));
         } catch (e) {
           args.sendPort.send(e.toString());
         }
@@ -68,9 +75,11 @@ class DataManager {
         receivePort.close();
         throw FormatException(message);
       } else {
-        final result = message as ({Map<int, StatType> statTypes, Map<String, List<Process>> processes});
+        final result =
+            message as ({Map<int, StatType> statTypes, Map<String, List<Process>> processes, int utcOffsetMs});
         statTypes.addAll(result.statTypes);
         processes.addAll(result.processes);
+        FileTime.utcOffsetMs = result.utcOffsetMs;
         receivePort.close();
         break;
       }
@@ -198,9 +207,30 @@ class DataManager {
     return statTypes;
   }
 
-  static Map<String, List<Process>> _parseProcesses(
+  /// Parse the UTC offset recorded in the file header's Time field, e.g.
+  /// `Time = "05/21/2026 00:00:02 -03"` or `Time = "2026-02-19T16:09:13.930-08:00"`.
+  /// Returns null when the header carries no numeric offset (e.g. a named
+  /// timezone like "MEST"), in which case the viewer's timezone is used.
+  static int? parseUtcOffsetMs(String content) {
+    final header = content.substring(0, content.length < 4096 ? content.length : 4096);
+    final timeLine = RegExp(r'^Time\s*=\s*"(.*)"', multiLine: true).firstMatch(header);
+    if (timeLine == null) {
+      return null;
+    }
+    final offset = RegExp(r'([+-])(\d{1,2}):?(\d{2})?\s*$').firstMatch(timeLine.group(1)!);
+    if (offset == null) {
+      return null;
+    }
+    final sign = offset.group(1) == '-' ? -1 : 1;
+    final hours = int.parse(offset.group(2)!);
+    final minutes = int.parse(offset.group(3) ?? '0');
+    return sign * (hours * 60 + minutes) * 60 * 1000;
+  }
+
+  static ({Map<String, List<Process>> processes, int utcOffsetMs}) _parseProcesses(
     String content,
     Map<int, StatType> statTypes, {
+    int? utcOffsetMs,
     void Function(double)? onProgress,
   }) {
     final processes = <String, List<Process>>{};
@@ -219,8 +249,13 @@ class DataManager {
       // Session ID and Process ID are null if they're not positive
       final processId = int.parse(parts[3]) > 0 ? int.parse(parts[3]) : null;
       final sessionId = int.parse(parts[4]) > 0 ? int.parse(parts[4]) : null;
-      final timestampMs = int.parse(parts[1]) * 1000;
-      final timestamp = DateTime.fromMillisecondsSinceEpoch(timestampMs);
+      // Shift timestamps to the file's recorded timezone and treat them as
+      // UTC wall-clock values, so times display as the server saw them
+      // regardless of the viewer's timezone.
+      final rawMs = int.parse(parts[1]) * 1000;
+      utcOffsetMs ??= DateTime.fromMillisecondsSinceEpoch(rawMs).timeZoneOffset.inMilliseconds;
+      final timestampMs = rawMs + utcOffsetMs;
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(timestampMs, isUtc: true);
 
       // Initialize list for this process name if it doesn't exist
       if (!processes.containsKey(processName)) {
@@ -277,7 +312,7 @@ class DataManager {
       }
     }
 
-    return processes;
+    return (processes: processes, utcOffsetMs: utcOffsetMs ?? 0);
   }
 
   /// Find a process by its unique identifiers: StatTypeNum, ProcessName, ProcessId, SessionId

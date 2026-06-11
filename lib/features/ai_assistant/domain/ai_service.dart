@@ -1,6 +1,7 @@
 import 'package:anthropic_sdk_dart/anthropic_sdk_dart.dart' as anthropic;
 import 'package:mcp_dart/mcp_dart.dart' as mcp;
 import 'package:vsd/domain/data_manager.dart';
+import 'package:vsd/domain/models/file_time.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_message.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_stream_events.dart';
 import 'package:vsd/features/mcp/helpers.dart';
@@ -282,7 +283,7 @@ class AiService {
       final maxT = allTimes.reduce((a, b) => a.isAfter(b) ? a : b);
       final dur = maxT.difference(minT);
       buf.writeln(
-        'Time range: ${minT.toIso8601String()} → ${maxT.toIso8601String()} '
+        'Time range: ${FileTime.format(minT)} → ${FileTime.format(maxT)} '
         '(${dur.inMinutes} min)',
       );
     }

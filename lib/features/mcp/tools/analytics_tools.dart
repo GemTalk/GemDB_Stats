@@ -1,4 +1,5 @@
 import 'package:vsd/domain/data_manager.dart';
+import 'package:vsd/domain/models/file_time.dart';
 import 'package:vsd/domain/models/time_series.dart';
 
 /// Returns time-series data for a specific statistic on a process.
@@ -50,7 +51,7 @@ Map<String, dynamic> executeGetStatisticValues({
     'downsampled': downsampled,
     'original_count': originalCount,
     'point_count': displayPoints.length,
-    'points': displayPoints.map((p) => {'t': p.timestamp.toIso8601String(), 'v': p.value}).toList(),
+    'points': displayPoints.map((p) => {'t': FileTime.format(p.timestamp), 'v': p.value}).toList(),
   };
 }
 

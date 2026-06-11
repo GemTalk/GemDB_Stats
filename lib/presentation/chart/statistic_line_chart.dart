@@ -65,7 +65,7 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
         .scaleXContinuous(
           title: 'Timestamp',
           labels: (value) => timeFormatter.format(
-            DateTime.fromMillisecondsSinceEpoch(value.toInt()),
+            DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true),
           ),
           min: minX,
           max: maxX,

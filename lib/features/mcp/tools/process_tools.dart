@@ -1,4 +1,5 @@
 import 'package:vsd/domain/data_manager.dart';
+import 'package:vsd/domain/models/file_time.dart';
 
 /// Returns a list of all loaded processes with metadata.
 Map<String, dynamic> executeListProcesses() {
@@ -10,20 +11,7 @@ Map<String, dynamic> executeListProcesses() {
     };
   }
   return {
-    'processes': dm.allProcesses
-        .map(
-          (p) => {
-            'name': p.name,
-            'type_name': p.type.name,
-            'type_id': p.type.id,
-            'process_id': p.processId,
-            'session_id': p.sessionId,
-            'start_time': p.startTime.toIso8601String(),
-            'end_time': p.endTime.toIso8601String(),
-            'samples': p.samples,
-          },
-        )
-        .toList(),
+    'processes': dm.allProcesses.map((p) => p.toMap()).toList(),
   };
 }
 
@@ -89,8 +77,8 @@ Map<String, dynamic> executeGetDatasetOverview() {
     'process_names': dm.processes.keys.toList(),
     'stat_type_names': dm.statTypes.values.map((t) => t.name).toSet().toList(),
     'time_range': {
-      'start': minTime.toIso8601String(),
-      'end': maxTime.toIso8601String(),
+      'start': FileTime.format(minTime),
+      'end': FileTime.format(maxTime),
       'duration_minutes': duration.inMinutes,
     },
     'total_samples': dm.allProcesses.fold<int>(0, (sum, p) => sum + p.samples),

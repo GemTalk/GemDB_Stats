@@ -170,7 +170,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         .scaleXContinuous(
           title: 'Timestamp',
           labels: (value) => timeFormatter.format(
-            DateTime.fromMillisecondsSinceEpoch(value.toInt()),
+            DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true),
           ),
           min: minX,
           max: maxX,
@@ -183,7 +183,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         )
         .build();
 
-    final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt()));
+    final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true));
 
     return MouseRegion(
       onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
@@ -201,15 +201,13 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           if (_mouseX != null && plotRect.width > 0) {
             final dataX = minX + (_mouseX! - plotRect.left) / plotRect.width * (maxX - minX);
             final snappedDataX = _nearestDataX(dataX, validSeries);
-            hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round());
+            hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
             hoveredEntries = _findHoveredEntries(snappedDataX, validSeries);
             crosshairX = plotRect.left + (snappedDataX - minX) / (maxX - minX) * plotRect.width;
 
             final yRange = (bounds.displayMax - bounds.displayMin).toDouble();
             dots = hoveredEntries.map((entry) {
-              final entryYT = yRange > 0
-                  ? 1.0 - (entry.value - bounds.displayMin) / yRange
-                  : 0.5;
+              final entryYT = yRange > 0 ? 1.0 - (entry.value - bounds.displayMin) / yRange : 0.5;
               return (
                 position: Offset(crosshairX!, plotRect.top + entryYT * plotRect.height),
                 color: entry.color,
@@ -294,7 +292,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         .scaleXContinuous(
           title: 'Timestamp',
           labels: (value) => timeFormatter.format(
-            DateTime.fromMillisecondsSinceEpoch(value.toInt()),
+            DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true),
           ),
           min: minX,
           max: maxX,
@@ -315,7 +313,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         .build();
 
     final allValid = [...validPrimary, ...validSecondary];
-    final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt()));
+    final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true));
 
     return MouseRegion(
       onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
@@ -333,7 +331,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           if (_mouseX != null && plotArea.width > 0) {
             final dataX = minX + (_mouseX! - plotArea.left) / plotArea.width * (maxX - minX);
             final snappedDataX = _nearestDataX(dataX, allValid);
-            hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round());
+            hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
             hoveredEntries = _findHoveredEntries(snappedDataX, allValid);
             crosshairX = plotArea.left + (snappedDataX - minX) / (maxX - minX) * plotArea.width;
 
@@ -341,9 +339,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
               final isPrimary = primarySeriesNames.contains(entry.name);
               final b = isPrimary ? primaryBounds : secondaryBounds;
               final yRange = (b.displayMax - b.displayMin).toDouble();
-              final entryYT = yRange > 0
-                  ? 1.0 - (entry.value - b.displayMin) / yRange
-                  : 0.5;
+              final entryYT = yRange > 0 ? 1.0 - (entry.value - b.displayMin) / yRange : 0.5;
               return (
                 position: Offset(crosshairX!, plotArea.top + entryYT * plotArea.height),
                 color: entry.color,
