@@ -21,6 +21,7 @@ dependencies:
   shadcn_ui: ^0.54.0
   shared_preferences: ^2.5.5
   streamdown: ^0.1.1
+  typed_data: ^1.4.0
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.4

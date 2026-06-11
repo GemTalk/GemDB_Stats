@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -35,19 +34,14 @@ class _FileBarState extends State<FileBar> {
 
       await prefs.setString(_kLastDirectoryKey, File(path).parent.path);
 
-      final String content;
-      if (path.endsWith('.gz')) {
-        final compressed = await File(path).readAsBytes();
-        content = utf8.decode(gzip.decode(compressed));
+      if (name.endsWith('.gz')) {
         name = name.substring(0, name.length - 3);
-      } else {
-        content = await File(path).readAsString();
       }
 
       setState(() {
         _fileName = name;
       });
-      widget.onFileSelected?.call(content);
+      widget.onFileSelected?.call(path);
     }
   }
 

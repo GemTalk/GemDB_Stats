@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/services.dart';
@@ -23,17 +25,19 @@ class DataManager {
     return processes.values.expand((list) => list).toList();
   }
 
-  /// Load and parse data from statmon file content
-  Future<void> loadFromContent(String content, {void Function(double)? onProgress}) async {
+  /// Load and parse data from a statmon file (optionally gzip-compressed)
+  Future<void> loadFromFile(String path, {void Function(double)? onProgress}) async {
     statTypes.clear();
     processes.clear();
 
-    // Use an isolate to parse the content without blocking the UI
+    // Use an isolate to read, decompress and parse the file without blocking the UI
     final receivePort = ReceivePort();
     await Isolate.spawn<_ParseArgs>(
       (_ParseArgs args) {
         try {
-          final content = args.content;
+          args.sendPort.send(0.02);
+          final bytes = File(args.path).readAsBytesSync();
+          final content = args.path.endsWith('.gz') ? utf8.decode(gzip.decode(bytes)) : utf8.decode(bytes);
           if (!content.contains('ENDHEADER')) {
             args.sendPort.send('Not a valid statmon file: missing ENDHEADER');
             return;
@@ -46,12 +50,14 @@ class DataManager {
             parsedStatTypes,
             onProgress: (p) => args.sendPort.send(0.1 + 0.9 * p),
           );
-          args.sendPort.send((statTypes: parsedStatTypes, processes: parsedProcesses));
+          // Isolate.exit transfers ownership of the result without copying it,
+          // unlike sendPort.send which deep-copies the whole object graph.
+          Isolate.exit(args.sendPort, (statTypes: parsedStatTypes, processes: parsedProcesses));
         } catch (e) {
           args.sendPort.send(e.toString());
         }
       },
-      (sendPort: receivePort.sendPort, content: content, statistics: Map.from(statistics)),
+      (sendPort: receivePort.sendPort, path: path, statistics: Map.from(statistics)),
     );
 
     // Listen for messages from the isolate
@@ -213,7 +219,8 @@ class DataManager {
       // Session ID and Process ID are null if they're not positive
       final processId = int.parse(parts[3]) > 0 ? int.parse(parts[3]) : null;
       final sessionId = int.parse(parts[4]) > 0 ? int.parse(parts[4]) : null;
-      final timestamp = DateTime.fromMillisecondsSinceEpoch(int.parse(parts[1]) * 1000);
+      final timestampMs = int.parse(parts[1]) * 1000;
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(timestampMs);
 
       // Initialize list for this process name if it doesn't exist
       if (!processes.containsKey(processName)) {
@@ -241,8 +248,9 @@ class DataManager {
         for (int statIdx = 0; statIdx < existingProcess.type.statistics.length; statIdx++) {
           final stat = existingProcess.type.statistics[statIdx];
 
-          existingProcess.statisticData[stat.name]!.points.add(
-            DataPoint(timestamp: timestamp, value: _parseStatValue(parts[statIdx + 6], stat.type)),
+          existingProcess.statisticData[stat.name]!.add(
+            timestampMs,
+            _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
           );
         }
       } else {
@@ -261,10 +269,8 @@ class DataManager {
         for (int statIdx = 0; statIdx < newProcess.type.statistics.length; statIdx++) {
           final stat = newProcess.type.statistics[statIdx];
 
-          newProcess.statisticData[stat.name] = TimeSeries(
-            statistic: stat,
-            points: [DataPoint(timestamp: timestamp, value: _parseStatValue(parts[statIdx + 6], stat.type))],
-          );
+          newProcess.statisticData[stat.name] = TimeSeries(statistic: stat)
+            ..add(timestampMs, _parseStatValue(parts[statIdx + 6], stat.type).toDouble());
         }
 
         processes[processName]!.add(newProcess);
@@ -298,7 +304,7 @@ class DataManager {
   }
 }
 
-typedef _ParseArgs = ({SendPort sendPort, String content, Map<String, Statistic> statistics});
+typedef _ParseArgs = ({SendPort sendPort, String path, Map<String, Statistic> statistics});
 
 /// Parses a raw string value from the data file into the correct [num] type.
 ///

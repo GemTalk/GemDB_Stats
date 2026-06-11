@@ -52,7 +52,7 @@ class _HomePageState extends State<HomePage> {
     setState(() => _aiPanelOpen = !_aiPanelOpen);
   }
 
-  Future<void> _handleFileSelected(String content) async {
+  Future<void> _handleFileSelected(String path) async {
     // _loadProgress is null when not loading
     if (_loadProgress != null) {
       return;
@@ -66,8 +66,8 @@ class _HomePageState extends State<HomePage> {
       _multiChartSelection = null;
     });
     try {
-      await DataManager().loadFromContent(
-        content,
+      await DataManager().loadFromFile(
+        path,
         onProgress: (p) {
           if (mounted) {
             setState(() => _loadProgress = p);
