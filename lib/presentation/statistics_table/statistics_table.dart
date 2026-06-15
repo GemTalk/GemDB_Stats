@@ -308,7 +308,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
             spacing: 8,
             children: [
               multiChartButton(),
-              Flexible(child: searchBar()),
+              searchBar(),
               threeDotMenu(statistics),
             ],
           ),
@@ -433,17 +433,19 @@ class _StatisticsTableState extends State<StatisticsTable> {
   }
 
   Widget searchBar() {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 500),
-      child: SearchBar(
-        controller: _searchController,
-        hintText: 'Search statistics',
-        onChanged: (value) {
-          setState(() {
-            searchQuery = value;
-          });
-          _updateGridRows();
-        },
+    return Flexible(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: SearchBar(
+          controller: _searchController,
+          hintText: 'Search statistics',
+          onChanged: (value) {
+            setState(() {
+              searchQuery = value;
+            });
+            _updateGridRows();
+          },
+        ),
       ),
     );
   }
