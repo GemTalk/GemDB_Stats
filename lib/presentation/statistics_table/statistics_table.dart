@@ -39,6 +39,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
   Set<int> _secondaryChecked = {};
 
   late final List<PlutoColumn> _columns;
+  List<PlutoRow> _rows = const [];
 
   @override
   void initState() {
@@ -88,6 +89,7 @@ class _StatisticsTableState extends State<StatisticsTable> {
         textAlign: PlutoColumnTextAlign.right,
       ),
     ];
+    _rows = _buildRows();
   }
 
   @override
@@ -287,9 +289,9 @@ class _StatisticsTableState extends State<StatisticsTable> {
       return;
     }
     _stateManager!.removeAllRows();
-    final newRows = _buildRows();
-    if (newRows.isNotEmpty) {
-      _stateManager!.appendRows(newRows);
+    _rows = _buildRows();
+    if (_rows.isNotEmpty) {
+      _stateManager!.appendRows(_rows);
     }
     _stateManager!.clearCurrentCell();
     _stateManager!.clearCurrentSelecting();
@@ -323,17 +325,21 @@ class _StatisticsTableState extends State<StatisticsTable> {
               final adjustedY = event.localPosition.dy - rowsTopOffset + scrollOffset;
               final rowIdx = adjustedY < 0 ? null : (adjustedY / rowTotalHeight).floor();
               if (rowIdx != _hoveredRowIndex) {
-                setState(() => _hoveredRowIndex = rowIdx);
+                // Repaint affected rows via the grid notifier rather than
+                // rebuilding the whole table (and re-running _buildRows) per frame.
+                _hoveredRowIndex = rowIdx;
+                _stateManager?.notifyListeners();
               }
             },
             onExit: (_) {
               if (_hoveredRowIndex != null) {
-                setState(() => _hoveredRowIndex = null);
+                _hoveredRowIndex = null;
+                _stateManager?.notifyListeners();
               }
             },
             child: PlutoGrid(
               columns: _columns,
-              rows: _buildRows(),
+              rows: _rows,
               mode: PlutoGridMode.selectWithOneTap,
               rowColorCallback: (ctx) {
                 final statIdx = ctx.row.cells['statIdx']?.value as int?;

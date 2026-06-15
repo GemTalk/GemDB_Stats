@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide SearchBar;
 import 'package:intl/intl.dart';
 import 'package:pluto_grid/pluto_grid.dart';
@@ -23,6 +24,12 @@ class _ProcessTableState extends State<ProcessTable> {
   final TextEditingController _searchController = TextEditingController();
   String searchQuery = '';
   late List<PlutoColumn> columns;
+  late final DateFormat _dateFormat;
+  late final List<Process> _allProcesses;
+  List<PlutoRow> _rows = const [];
+  // Tracks whether the cursor is over a data row, so the click/basic cursor can
+  // update without rebuilding the grid on every hover frame.
+  final ValueNotifier<bool> _overRow = ValueNotifier(false);
 
   @override
   void initState() {
@@ -85,17 +92,23 @@ class _ProcessTableState extends State<ProcessTable> {
         enableContextMenu: false,
       ),
     ];
+    // Built once: the widget is recreated (via key) when the data set or
+    // showYear changes, so these snapshots stay valid for this State's lifetime.
+    _dateFormat = DateFormat(widget.showYear ? 'yyyy/MM/dd HH:mm:ss' : 'MM/dd HH:mm:ss');
+    _allProcesses = DataManager().allProcesses;
+    _rows = _buildRows();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _overRow.dispose();
     super.dispose();
   }
 
   List<PlutoRow> _buildRows() {
     final q = searchQuery.toLowerCase();
-    return DataManager().allProcesses
+    return _allProcesses
         .where((process) {
           if (q.isEmpty) {
             return true;
@@ -107,12 +120,8 @@ class _ProcessTableState extends State<ProcessTable> {
         .map((process) {
           return PlutoRow(
             cells: {
-              'startTime': PlutoCell(
-                value: DateFormat(widget.showYear ? 'yyyy/MM/dd HH:mm:ss' : 'MM/dd HH:mm:ss').format(process.startTime),
-              ),
-              'endTime': PlutoCell(
-                value: DateFormat(widget.showYear ? 'yyyy/MM/dd HH:mm:ss' : 'MM/dd HH:mm:ss').format(process.endTime),
-              ),
+              'startTime': PlutoCell(value: _dateFormat.format(process.startTime)),
+              'endTime': PlutoCell(value: _dateFormat.format(process.endTime)),
               'file': PlutoCell(value: 1),
               'samples': PlutoCell(value: process.samples),
               'processId': PlutoCell(value: (process.processId ?? '').toString()),
@@ -131,12 +140,46 @@ class _ProcessTableState extends State<ProcessTable> {
       return;
     }
     _stateManager!.removeAllRows();
-    final newRows = _buildRows();
-    if (newRows.isNotEmpty) {
-      _stateManager!.appendRows(newRows);
+    _rows = _buildRows();
+    if (_rows.isNotEmpty) {
+      _stateManager!.appendRows(_rows);
     }
     _stateManager!.clearCurrentCell();
     _stateManager!.clearCurrentSelecting();
+  }
+
+  /// Maps a pointer position to the row index currently under it, or null if it
+  /// is past the last row.
+  int? _rowIndexAt(Offset localPosition) {
+    final scrollOffset = _stateManager?.scroll.vertical?.offset ?? 0;
+    final rowsTopOffset = (_stateManager?.rowsTopOffset ?? 30) + PlutoGridSettings.gridBorderWidth;
+    final rowTotalHeight = _stateManager?.rowTotalHeight ?? 26.0;
+    final rowCount = _stateManager?.refRows.length ?? 0;
+    final adjustedY = localPosition.dy - rowsTopOffset + scrollOffset;
+    if (adjustedY < 0) {
+      return null;
+    }
+    final rowIdx = (adjustedY / rowTotalHeight).floor();
+    return rowIdx < rowCount ? rowIdx : null;
+  }
+
+  void _onRowHover(PointerHoverEvent event) {
+    final rowIdx = _rowIndexAt(event.localPosition);
+    if (rowIdx != _hoveredRowIndex) {
+      // Repaint the affected rows via the grid's notifier instead of setState,
+      // so the whole table (and _buildRows) is not rebuilt on every hover frame.
+      _hoveredRowIndex = rowIdx;
+      _stateManager?.notifyListeners();
+    }
+    _overRow.value = rowIdx != null;
+  }
+
+  void _onRowExit(PointerExitEvent event) {
+    _overRow.value = false;
+    if (_hoveredRowIndex != null) {
+      _hoveredRowIndex = null;
+      _stateManager?.notifyListeners();
+    }
   }
 
   @override
@@ -147,25 +190,16 @@ class _ProcessTableState extends State<ProcessTable> {
         searchBar(),
         const Divider(height: 1),
         Expanded(
-          child: MouseRegion(
-            cursor: (_hoveredRowIndex != null && _hoveredRowIndex! < _buildRows().length)
-                ? SystemMouseCursors.click
-                : SystemMouseCursors.basic,
-            onHover: (event) {
-              final scrollOffset = _stateManager?.scroll.vertical?.offset ?? 0;
-              final rowsTopOffset = (_stateManager?.rowsTopOffset ?? 30) + PlutoGridSettings.gridBorderWidth;
-              final rowTotalHeight = _stateManager?.rowTotalHeight ?? 26.0;
-              final adjustedY = event.localPosition.dy - rowsTopOffset + scrollOffset;
-              final rowIdx = adjustedY < 0 ? null : (adjustedY / rowTotalHeight).floor();
-              if (rowIdx != _hoveredRowIndex) {
-                setState(() => _hoveredRowIndex = rowIdx);
-              }
-            },
-            onExit: (_) {
-              if (_hoveredRowIndex != null) {
-                setState(() => _hoveredRowIndex = null);
-              }
-            },
+          // The grid is passed as `child` so it is built once and reused; only
+          // the MouseRegion wrapper rebuilds when the cursor flag changes.
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _overRow,
+            builder: (context, overRow, child) => MouseRegion(
+              cursor: overRow ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              onHover: _onRowHover,
+              onExit: _onRowExit,
+              child: child,
+            ),
             child: PlutoGrid(
               rowColorCallback: (rowColorContext) {
                 if (_rowSelectionKey(rowColorContext.row) == selectedProcessSelectionKey) {
@@ -177,7 +211,7 @@ class _ProcessTableState extends State<ProcessTable> {
                 return Colors.white;
               },
               columns: columns,
-              rows: _buildRows(),
+              rows: _rows,
               mode: PlutoGridMode.selectWithOneTap,
               configuration: PlutoGridConfiguration(
                 style: PlutoGridStyleConfig(
