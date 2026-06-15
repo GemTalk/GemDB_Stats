@@ -28,7 +28,55 @@ class _HomePageState extends State<HomePage> {
   String? _loadError;
   int _dataVersion = 0;
   bool _aiPanelOpen = false;
+  bool _showYear = true;
   late MultiSplitViewController _mainController;
+
+  List<PlatformMenu> get platformMenus => [
+    PlatformMenu(
+      label: 'vsd',
+      menus: [
+        PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
+        PlatformMenuItemGroup(
+          members: [
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.servicesSubmenu),
+          ],
+        ),
+        PlatformMenuItemGroup(
+          members: [
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hide),
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hideOtherApplications),
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.showAllApplications),
+          ],
+        ),
+        PlatformMenuItemGroup(
+          members: [
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
+          ],
+        ),
+      ],
+    ),
+    PlatformMenu(
+      label: 'View',
+      menus: [
+        PlatformMenuItem(
+          label: _showYear ? '✓ Show Year' : 'Show Year',
+          onSelected: () => setState(() => _showYear = !_showYear),
+        ),
+      ],
+    ),
+    PlatformMenu(
+      label: 'Window',
+      menus: [
+        PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.minimizeWindow),
+        PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.zoomWindow),
+        PlatformMenuItemGroup(
+          members: [
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.arrangeWindowsInFront),
+          ],
+        ),
+      ],
+    ),
+  ];
 
   @override
   void initState() {
@@ -88,38 +136,41 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          FileBar(
-            onFileSelected: _handleFileSelected,
-            trailing: ToolIconButton(
-              icon: FontAwesomeIcons.message,
-              tooltip: 'Toggle Chat',
-              onTap: _toggleAiPanel,
-            ),
-          ),
-          if (_loadProgress != null)
-            progressIndicator()
-          else if (_loadError != null)
-            Expanded(
-              child: Center(
-                child: Text(
-                  'Error loading file: $_loadError',
-                  style: const TextStyle(color: Colors.red),
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: multiSplitViewTheme(
-                child: MultiSplitView(
-                  axis: Axis.horizontal,
-                  controller: _mainController,
-                ),
+    return PlatformMenuBar(
+      menus: platformMenus,
+      child: Scaffold(
+        body: Column(
+          children: [
+            FileBar(
+              onFileSelected: _handleFileSelected,
+              trailing: ToolIconButton(
+                icon: FontAwesomeIcons.message,
+                tooltip: 'Toggle Chat',
+                onTap: _toggleAiPanel,
               ),
             ),
-        ],
+            if (_loadProgress != null)
+              progressIndicator()
+            else if (_loadError != null)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    'Error loading file: $_loadError',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: multiSplitViewTheme(
+                  child: MultiSplitView(
+                    axis: Axis.horizontal,
+                    controller: _mainController,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -181,7 +232,8 @@ class _HomePageState extends State<HomePage> {
   Area processTableArea() {
     return Area(
       builder: (context, area) => ProcessTable(
-        key: ValueKey(_dataVersion),
+        key: ValueKey((_dataVersion, _showYear)),
+        showYear: _showYear,
         onProcessSelected: (process) {
           setState(() {
             selectedProcess = process;
