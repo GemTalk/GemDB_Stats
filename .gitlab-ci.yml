@@ -1,32 +1,24 @@
 default:
+  image: ghcr.io/cirruslabs/flutter:latest
   cache:
     paths:
       - $CI_PROJECT_DIR/.pub-cache/
   before_script:
     - export PUB_CACHE=$CI_PROJECT_DIR/.pub-cache
     - export PATH="$PATH":"$PUB_CACHE/bin"
+    - flutter --version
+    - flutter pub get
 
 stages:
   - test
 
 lint:
-  image: dart:stable
   stage: test
-  before_script:
-    - export PUB_CACHE=$CI_PROJECT_DIR/.pub-cache
-    - export PATH="$PATH":"$PUB_CACHE/bin"
-    - dart pub get
   script:
     - dart format --output=none --set-exit-if-changed .
     - dart analyze
 
 test:
-  image: ghcr.io/cirruslabs/flutter:latest
   stage: test
-  before_script:
-    - flutter --version
-    - export PUB_CACHE=$CI_PROJECT_DIR/.pub-cache
-    - export PATH="$PATH":"$PUB_CACHE/bin"
-    - flutter pub get
   script:
     - flutter test
