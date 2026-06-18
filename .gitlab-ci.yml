@@ -13,10 +13,6 @@ default:
 stages:
   - test
 
-before_script:
-  - flutter --version
-  - flutter pub get
-
 lint:
   stage: test
   script:
