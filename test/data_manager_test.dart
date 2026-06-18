@@ -12,11 +12,12 @@ void main() {
       expect(statTypes.isNotEmpty, true);
       expect(statTypes.values.first.name, isNotEmpty);
 
-      // Expect the "Linux_System" stat type to have 56 statistics, 
-      // excluding the first 3 which are StatTypeNum, Time, and ProcessName.
+      // Expect the "Linux_System" stat type to have 56 fields, excluding the
+      // first 6 header fields (StatTypeNum, Time, ProcessName, ProcessId,
+      // SessionId, CacheSerialNum) which aren't statistics.
       final linux = statTypes[128];
       expect(linux, isNotNull);
-      expect(linux!.statistics.length, 56-3);
+      expect(linux!.statistics.length, 56-6);
     });
 
     test('parseUtcOffsetMs reads the header timezone offset', () {
