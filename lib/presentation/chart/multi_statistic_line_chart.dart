@@ -2,10 +2,13 @@ import 'dart:math' as math;
 
 import 'package:cristalyse/cristalyse.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:vsd/domain/models/time_series.dart';
+import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd/presentation/chart/chart_crosshair.dart';
 import 'package:vsd/presentation/chart/chart_utils.dart';
+import 'package:vsd/presentation/chart/selection_box_painter.dart';
 
 // Matches Cristalyse's default ChartTheme.defaultTheme() colorPalette order.
 const List<Color> kMultiChartPalette = [
@@ -69,14 +72,62 @@ class MultiStatisticLineChart extends StatefulWidget {
 class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   double? _mouseX;
 
-  // Finds the nearest data-x value (ms since epoch) across all series by
-  // x-only distance, used to snap the trackball to the closest timestamp.
-  double _nearestDataX(double dataX, List<({String name, List<DataPoint> points})> allValid) {
+  // Active zoom window in data coordinates; null means "show full range".
+  // minY/maxY apply to the primary (left) axis, minY2/maxY2 to the secondary
+  // (right) axis when the chart is dual-axis.
+  ({double minX, double maxX, double minY, double maxY, double? minY2, double? maxY2})? _zoom;
+
+  // Transient drag state for the marquee selection box.
+  Offset? _dragStart;
+  Offset? _dragCurrent;
+  bool _dragging = false;
+
+  @override
+  void didUpdateWidget(MultiStatisticLineChart old) {
+    super.didUpdateWidget(old);
+    // The series lists are rebuilt every parent build, so compare a stable
+    // projection: series names + each series' points identity. Reset the zoom
+    // when the selection or underlying data changes.
+    if (_seriesChanged(old.primarySeries, widget.primarySeries) ||
+        _seriesChanged(old.secondarySeries, widget.secondarySeries)) {
+      _zoom = null;
+    }
+  }
+
+  bool _seriesChanged(
+    List<({String name, List<DataPoint> points})> a,
+    List<({String name, List<DataPoint> points})> b,
+  ) {
+    if (a.length != b.length) {
+      return true;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].name != b[i].name ||
+          !identical(a[i].points, b[i].points) ||
+          a[i].points.length != b[i].points.length) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Finds the nearest in-window data-x value (ms since epoch) across all
+  // series, used to snap the trackball. Returns null when the visible window
+  // contains no points.
+  double? _nearestDataX(
+    double dataX,
+    List<({String name, List<DataPoint> points})> allValid,
+    double minX,
+    double maxX,
+  ) {
     var bestDist = double.infinity;
-    var bestX = dataX;
+    double? bestX;
     for (final s in allValid) {
       for (final p in s.points) {
         final px = p.timestamp.millisecondsSinceEpoch.toDouble();
+        if (px < minX || px > maxX) {
+          continue;
+        }
         final d = (px - dataX).abs();
         if (d < bestDist) {
           bestDist = d;
@@ -90,16 +141,30 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   List<({String name, num value, Color color})> _findHoveredEntries(
     double dataX,
     List<({String name, List<DataPoint> points})> allValid,
+    double minX,
+    double maxX,
   ) {
-    return allValid.asMap().entries.map((e) {
-      final color = kMultiChartPalette[e.key % kMultiChartPalette.length];
-      final nearest = e.value.points.reduce((a, b) {
-        final aDist = (a.timestamp.millisecondsSinceEpoch.toDouble() - dataX).abs();
-        final bDist = (b.timestamp.millisecondsSinceEpoch.toDouble() - dataX).abs();
-        return aDist <= bDist ? a : b;
-      });
-      return (name: e.value.name, value: nearest.value, color: color);
-    }).toList();
+    final result = <({String name, num value, Color color})>[];
+    for (var i = 0; i < allValid.length; i++) {
+      final color = kMultiChartPalette[i % kMultiChartPalette.length];
+      DataPoint? nearest;
+      var bestDist = double.infinity;
+      for (final p in allValid[i].points) {
+        final px = p.timestamp.millisecondsSinceEpoch.toDouble();
+        if (px < minX || px > maxX) {
+          continue;
+        }
+        final d = (px - dataX).abs();
+        if (d < bestDist) {
+          bestDist = d;
+          nearest = p;
+        }
+      }
+      if (nearest != null) {
+        result.add((name: allValid[i].name, value: nearest.value, color: color));
+      }
+    }
+    return result;
   }
 
   num _computePadding(num range) {
@@ -116,6 +181,128 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     final displayMin = minY >= 0 ? (minY - padding).clamp(0, minY) : minY - padding;
     final displayMax = maxY + padding;
     return (displayMin: displayMin, displayMax: displayMax, ticks: buildChartTicks(displayMin, displayMax));
+  }
+
+  // Wraps chart content with the drag-to-zoom gesture handling.
+  Widget _zoomGestureDetector({
+    required Widget child,
+    required Rect plotRect,
+    required double minX,
+    required double maxX,
+    required double minY,
+    required double maxY,
+    required List<({String name, List<DataPoint> points})> windowSeries,
+    double? minY2,
+    double? maxY2,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onDoubleTap: _zoom == null ? null : () => setState(() => _zoom = null),
+      onPanStart: (details) {
+        _dragStart = details.localPosition;
+        _dragCurrent = details.localPosition;
+      },
+      onPanUpdate: (details) => setState(() {
+        _dragCurrent = details.localPosition;
+        if (!_dragging && (details.localPosition - _dragStart!).distance > kDragThreshold) {
+          _dragging = true;
+        }
+      }),
+      onPanEnd: (_) => _commitZoom(
+        plotRect: plotRect,
+        minX: minX,
+        maxX: maxX,
+        minY: minY,
+        maxY: maxY,
+        minY2: minY2,
+        maxY2: maxY2,
+        windowSeries: windowSeries,
+      ),
+      onPanCancel: () => setState(() {
+        _dragStart = null;
+        _dragCurrent = null;
+        _dragging = false;
+      }),
+      child: child,
+    );
+  }
+
+  void _commitZoom({
+    required Rect plotRect,
+    required double minX,
+    required double maxX,
+    required double minY,
+    required double maxY,
+    required List<({String name, List<DataPoint> points})> windowSeries,
+    double? minY2,
+    double? maxY2,
+  }) {
+    final start = _dragStart;
+    final current = _dragCurrent;
+    Rect? box;
+    if (start != null && current != null) {
+      box = normalizeDragBox(start, current, plotRect);
+    }
+
+    setState(() {
+      _dragStart = null;
+      _dragCurrent = null;
+      _dragging = false;
+      if (box == null) {
+        return; // click / sliver — not a zoom
+      }
+      final newMinX = pixelToDataX(box.left, plotRect, minX, maxX);
+      final newMaxX = pixelToDataX(box.right, plotRect, minX, maxX);
+      // Top pixel = max value, bottom pixel = min value.
+      final newMaxY = pixelToDataY(box.top, plotRect, minY, maxY);
+      final newMinY = pixelToDataY(box.bottom, plotRect, minY, maxY);
+      double? newMinY2;
+      double? newMaxY2;
+      if (minY2 != null && maxY2 != null) {
+        newMaxY2 = pixelToDataY(box.top, plotRect, minY2, maxY2);
+        newMinY2 = pixelToDataY(box.bottom, plotRect, minY2, maxY2);
+      }
+
+      final hasPoints = windowSeries.any(
+        (s) => s.points.any((p) {
+          final px = p.timestamp.millisecondsSinceEpoch.toDouble();
+          return px >= newMinX && px <= newMaxX;
+        }),
+      );
+      if (!hasPoints || newMaxX <= newMinX || newMaxY <= newMinY) {
+        return;
+      }
+      _zoom = (minX: newMinX, maxX: newMaxX, minY: newMinY, maxY: newMaxY, minY2: newMinY2, maxY2: newMaxY2);
+    });
+  }
+
+  Widget _resetButton() {
+    if (_zoom == null) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      top: 4,
+      right: 4,
+      child: ToolIconButton(
+        icon: FontAwesomeIcons.magnifyingGlassMinus,
+        tooltip: 'Reset zoom',
+        onTap: () => setState(() => _zoom = null),
+      ),
+    );
+  }
+
+  Widget? _selectionOverlay(Size size) {
+    if (!_dragging || _dragStart == null || _dragCurrent == null) {
+      return null;
+    }
+    return IgnorePointer(
+      child: SizedBox.fromSize(
+        size: size,
+        child: CustomPaint(
+          painter: SelectionBoxPainter(box: Rect.fromPoints(_dragStart!, _dragCurrent!)),
+        ),
+      ),
+    );
   }
 
   @override
@@ -159,8 +346,15 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     final bounds = _yBounds(validSeries);
 
     final allX = allData.map((d) => d['x'] as double).toList();
-    final minX = allX.reduce((a, b) => a < b ? a : b);
-    final maxX = allX.reduce((a, b) => a > b ? a : b);
+    final fullMinX = allX.reduce((a, b) => a < b ? a : b);
+    final fullMaxX = allX.reduce((a, b) => a > b ? a : b);
+
+    // Active bounds: exact zoom box when zoomed (bypasses padding / clamp).
+    final minX = _zoom?.minX ?? fullMinX;
+    final maxX = _zoom?.maxX ?? fullMaxX;
+    final displayMinY = _zoom?.minY ?? bounds.displayMin.toDouble();
+    final displayMaxY = _zoom?.maxY ?? bounds.displayMax.toDouble();
+    final yTicks = buildChartTicks(displayMinY, displayMaxY);
 
     final chart = CristalyseChart()
         .data(allData)
@@ -176,64 +370,81 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           max: maxX,
         )
         .scaleYContinuous(
-          labels: chartTickFormatter(bounds.ticks),
-          min: bounds.displayMin.toDouble(),
-          max: bounds.displayMax.toDouble(),
-          tickConfig: TickConfig(ticks: bounds.ticks),
+          labels: chartTickFormatter(yTicks),
+          min: displayMinY,
+          max: displayMaxY,
+          tickConfig: TickConfig(ticks: yTicks),
         )
         .build();
 
     final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true));
 
     return MouseRegion(
+      cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,
       onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
       onExit: (_) => setState(() => _mouseX = null),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
-          final plotRect = computePlotRect(size, bounds.ticks, [], sampleXLabel);
+          final plotRect = computePlotRect(size, yTicks, [], sampleXLabel);
 
           List<({String name, num value, Color color})>? hoveredEntries;
           DateTime? hoveredTimestamp;
           double? crosshairX;
           List<({Offset position, Color color})> dots = const [];
 
-          if (_mouseX != null && plotRect.width > 0) {
-            final dataX = minX + (_mouseX! - plotRect.left) / plotRect.width * (maxX - minX);
-            final snappedDataX = _nearestDataX(dataX, validSeries);
-            hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
-            hoveredEntries = _findHoveredEntries(snappedDataX, validSeries);
-            crosshairX = plotRect.left + (snappedDataX - minX) / (maxX - minX) * plotRect.width;
+          if (!_dragging && _mouseX != null && plotRect.width > 0) {
+            final dataX = pixelToDataX(_mouseX!, plotRect, minX, maxX);
+            final snappedDataX = _nearestDataX(dataX, validSeries, minX, maxX);
+            if (snappedDataX != null) {
+              hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
+              hoveredEntries = _findHoveredEntries(snappedDataX, validSeries, minX, maxX);
+              crosshairX = plotRect.left + (snappedDataX - minX) / (maxX - minX) * plotRect.width;
 
-            final yRange = (bounds.displayMax - bounds.displayMin).toDouble();
-            dots = hoveredEntries.map((entry) {
-              final entryYT = yRange > 0 ? 1.0 - (entry.value - bounds.displayMin) / yRange : 0.5;
-              return (
-                position: Offset(crosshairX!, plotRect.top + entryYT * plotRect.height),
-                color: entry.color,
-              );
-            }).toList();
+              final yRange = displayMaxY - displayMinY;
+              dots = hoveredEntries.map((entry) {
+                final entryYT = yRange > 0 ? 1.0 - (entry.value - displayMinY) / yRange : 0.5;
+                return (
+                  position: Offset(crosshairX!, plotRect.top + entryYT * plotRect.height),
+                  color: entry.color,
+                );
+              }).toList();
+            }
           }
+
+          final children = <Widget>[
+            chart,
+            if (crosshairX != null)
+              IgnorePointer(
+                child: SizedBox.fromSize(
+                  size: size,
+                  child: CustomPaint(
+                    painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
+                  ),
+                ),
+              ),
+            ?_selectionOverlay(size),
+            if (hoveredEntries != null && hoveredEntries.isNotEmpty && hoveredTimestamp != null && crosshairX != null)
+              buildPositionedTooltip(
+                entries: hoveredEntries,
+                timestamp: hoveredTimestamp,
+                crosshairX: crosshairX,
+                size: size,
+              ),
+          ];
 
           return Stack(
             children: [
-              chart,
-              if (crosshairX != null)
-                IgnorePointer(
-                  child: SizedBox.fromSize(
-                    size: size,
-                    child: CustomPaint(
-                      painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
-                    ),
-                  ),
-                ),
-              if (hoveredEntries != null && hoveredTimestamp != null && crosshairX != null)
-                buildPositionedTooltip(
-                  entries: hoveredEntries,
-                  timestamp: hoveredTimestamp,
-                  crosshairX: crosshairX,
-                  size: size,
-                ),
+              _zoomGestureDetector(
+                plotRect: plotRect,
+                minX: minX,
+                maxX: maxX,
+                minY: displayMinY,
+                maxY: displayMaxY,
+                windowSeries: validSeries,
+                child: Stack(children: children),
+              ),
+              _resetButton(),
             ],
           );
         },
@@ -279,8 +490,18 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     ];
 
     final allX = allData.map((d) => d['x'] as double).toList();
-    final minX = allX.reduce((a, b) => a < b ? a : b);
-    final maxX = allX.reduce((a, b) => a > b ? a : b);
+    final fullMinX = allX.reduce((a, b) => a < b ? a : b);
+    final fullMaxX = allX.reduce((a, b) => a > b ? a : b);
+
+    // Active bounds: exact zoom box when zoomed (each axis independently).
+    final minX = _zoom?.minX ?? fullMinX;
+    final maxX = _zoom?.maxX ?? fullMaxX;
+    final primMinY = _zoom?.minY ?? primaryBounds.displayMin.toDouble();
+    final primMaxY = _zoom?.maxY ?? primaryBounds.displayMax.toDouble();
+    final secMinY = _zoom?.minY2 ?? secondaryBounds.displayMin.toDouble();
+    final secMaxY = _zoom?.maxY2 ?? secondaryBounds.displayMax.toDouble();
+    final primTicks = buildChartTicks(primMinY, primMaxY);
+    final secTicks = buildChartTicks(secMinY, secMaxY);
 
     final chart = CristalyseChart()
         .data(allData)
@@ -298,16 +519,16 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           max: maxX,
         )
         .scaleYContinuous(
-          labels: chartTickFormatter(primaryBounds.ticks),
-          min: primaryBounds.displayMin.toDouble(),
-          max: primaryBounds.displayMax.toDouble(),
-          tickConfig: TickConfig(ticks: primaryBounds.ticks),
+          labels: chartTickFormatter(primTicks),
+          min: primMinY,
+          max: primMaxY,
+          tickConfig: TickConfig(ticks: primTicks),
         )
         .scaleY2Continuous(
-          labels: chartTickFormatter(secondaryBounds.ticks),
-          min: secondaryBounds.displayMin.toDouble(),
-          max: secondaryBounds.displayMax.toDouble(),
-          tickConfig: TickConfig(ticks: secondaryBounds.ticks),
+          labels: chartTickFormatter(secTicks),
+          min: secMinY,
+          max: secMaxY,
+          tickConfig: TickConfig(ticks: secTicks),
         )
         .theme(_kDualAxisTheme)
         .build();
@@ -316,73 +537,93 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true));
 
     return MouseRegion(
+      cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,
       onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
       onExit: (_) => setState(() => _mouseX = null),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
-          final plotArea = computePlotRect(size, primaryBounds.ticks, secondaryBounds.ticks, sampleXLabel);
+          final plotArea = computePlotRect(size, primTicks, secTicks, sampleXLabel);
 
           List<({String name, num value, Color color})>? hoveredEntries;
           DateTime? hoveredTimestamp;
           double? crosshairX;
           List<({Offset position, Color color})> dots = const [];
 
-          if (_mouseX != null && plotArea.width > 0) {
-            final dataX = minX + (_mouseX! - plotArea.left) / plotArea.width * (maxX - minX);
-            final snappedDataX = _nearestDataX(dataX, allValid);
-            hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
-            hoveredEntries = _findHoveredEntries(snappedDataX, allValid);
-            crosshairX = plotArea.left + (snappedDataX - minX) / (maxX - minX) * plotArea.width;
+          if (!_dragging && _mouseX != null && plotArea.width > 0) {
+            final dataX = pixelToDataX(_mouseX!, plotArea, minX, maxX);
+            final snappedDataX = _nearestDataX(dataX, allValid, minX, maxX);
+            if (snappedDataX != null) {
+              hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
+              hoveredEntries = _findHoveredEntries(snappedDataX, allValid, minX, maxX);
+              crosshairX = plotArea.left + (snappedDataX - minX) / (maxX - minX) * plotArea.width;
 
-            dots = hoveredEntries.map((entry) {
-              final isPrimary = primarySeriesNames.contains(entry.name);
-              final b = isPrimary ? primaryBounds : secondaryBounds;
-              final yRange = (b.displayMax - b.displayMin).toDouble();
-              final entryYT = yRange > 0 ? 1.0 - (entry.value - b.displayMin) / yRange : 0.5;
-              return (
-                position: Offset(crosshairX!, plotArea.top + entryYT * plotArea.height),
-                color: entry.color,
-              );
-            }).toList();
+              dots = hoveredEntries.map((entry) {
+                final isPrimary = primarySeriesNames.contains(entry.name);
+                final bMin = isPrimary ? primMinY : secMinY;
+                final bMax = isPrimary ? primMaxY : secMaxY;
+                final yRange = bMax - bMin;
+                final entryYT = yRange > 0 ? 1.0 - (entry.value - bMin) / yRange : 0.5;
+                return (
+                  position: Offset(crosshairX!, plotArea.top + entryYT * plotArea.height),
+                  color: entry.color,
+                );
+              }).toList();
+            }
           }
 
-          return Stack(
-            children: [
-              chart,
-              // Dashed secondary lines drawn on top of the Cristalyse chart.
+          final children = <Widget>[
+            chart,
+            // Dashed secondary lines drawn on top of the Cristalyse chart.
+            IgnorePointer(
+              child: SizedBox.fromSize(
+                size: size,
+                child: CustomPaint(
+                  painter: _DashedLinesPainter(
+                    series: validSecondary,
+                    colorOffset: validPrimary.length,
+                    plotArea: plotArea,
+                    minX: minX,
+                    maxX: maxX,
+                    displayMin: secMinY,
+                    displayMax: secMaxY,
+                  ),
+                ),
+              ),
+            ),
+            if (crosshairX != null)
               IgnorePointer(
                 child: SizedBox.fromSize(
                   size: size,
                   child: CustomPaint(
-                    painter: _DashedLinesPainter(
-                      series: validSecondary,
-                      colorOffset: validPrimary.length,
-                      plotArea: plotArea,
-                      minX: minX,
-                      maxX: maxX,
-                      displayMin: secondaryBounds.displayMin,
-                      displayMax: secondaryBounds.displayMax,
-                    ),
+                    painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
                   ),
                 ),
               ),
-              if (crosshairX != null)
-                IgnorePointer(
-                  child: SizedBox.fromSize(
-                    size: size,
-                    child: CustomPaint(
-                      painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
-                    ),
-                  ),
-                ),
-              if (hoveredEntries != null && hoveredTimestamp != null && crosshairX != null)
-                buildPositionedTooltip(
-                  entries: hoveredEntries,
-                  timestamp: hoveredTimestamp,
-                  crosshairX: crosshairX,
-                  size: size,
-                ),
+            ?_selectionOverlay(size),
+            if (hoveredEntries != null && hoveredEntries.isNotEmpty && hoveredTimestamp != null && crosshairX != null)
+              buildPositionedTooltip(
+                entries: hoveredEntries,
+                timestamp: hoveredTimestamp,
+                crosshairX: crosshairX,
+                size: size,
+              ),
+          ];
+
+          return Stack(
+            children: [
+              _zoomGestureDetector(
+                plotRect: plotArea,
+                minX: minX,
+                maxX: maxX,
+                minY: primMinY,
+                maxY: primMaxY,
+                minY2: secMinY,
+                maxY2: secMaxY,
+                windowSeries: allValid,
+                child: Stack(children: children),
+              ),
+              _resetButton(),
             ],
           );
         },
@@ -418,6 +659,11 @@ class _DashedLinesPainter extends CustomPainter {
       return;
     }
 
+    // Clip to the plot area so zoomed-out segments don't bleed over the axes
+    // and labels (Cristalyse clips its own geometry the same way).
+    canvas.save();
+    canvas.clipRect(plotArea);
+
     for (int i = 0; i < series.length; i++) {
       final s = series[i];
       final color = kMultiChartPalette[(colorOffset + i) % kMultiChartPalette.length];
@@ -431,6 +677,8 @@ class _DashedLinesPainter extends CustomPainter {
 
       _drawDashed(canvas, pts, color);
     }
+
+    canvas.restore();
   }
 
   void _drawDashed(Canvas canvas, List<Offset> pts, Color color) {

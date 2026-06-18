@@ -8,6 +8,10 @@ import 'package:vsd/presentation/chart/trackball_tooltip.dart';
 const double kChartPlotTop = 16.0;
 const double kChartTooltipWidth = 170.0;
 
+/// Pointer travel (logical px) before a pan is treated as a zoom drag rather
+/// than a click, so accidental clicks don't trigger a zoom.
+const double kDragThreshold = 8.0;
+
 const Widget kNotEnoughDataWidget = Center(
   child: Text(
     'Not enough data',
@@ -113,6 +117,50 @@ Rect computePlotRect(
     size.width - leftPad - rightPad,
     size.height - kChartPlotTop - bottomPad,
   );
+}
+
+/// Converts a horizontal pixel position to a data-x value, the inverse of the
+/// data→pixel mapping used to draw the chart. [minX]/[maxX] are the currently
+/// displayed x bounds (zoomed or full).
+double pixelToDataX(double px, Rect plot, double minX, double maxX) {
+  if (plot.width <= 0) {
+    return minX;
+  }
+  return minX + (px - plot.left) / plot.width * (maxX - minX);
+}
+
+/// Converts a vertical pixel position to a data-y value. Pixels grow downward,
+/// so the top of the plot maps to [maxY] and the bottom to [minY].
+double pixelToDataY(double py, Rect plot, double minY, double maxY) {
+  if (plot.height <= 0) {
+    return minY;
+  }
+  return minY + (1.0 - (py - plot.top) / plot.height) * (maxY - minY);
+}
+
+/// Normalizes a drag from [a] to [b] into an axis-aligned rectangle clamped to
+/// [plot]. Returns null when either side is shorter than [minPx] — the gesture
+/// was a click or an accidental sliver, not a zoom box. Normalizing handles
+/// right-to-left and bottom-to-top drags; clamping keeps the box inside the
+/// plot so the resulting data bounds never invert (cristalyse throws when
+/// min > max).
+Rect? normalizeDragBox(Offset a, Offset b, Rect plot, {double minPx = 12}) {
+  final left = a.dx < b.dx ? a.dx : b.dx;
+  final right = a.dx < b.dx ? b.dx : a.dx;
+  final top = a.dy < b.dy ? a.dy : b.dy;
+  final bottom = a.dy < b.dy ? b.dy : a.dy;
+
+  final clamped = Rect.fromLTRB(
+    left.clamp(plot.left, plot.right),
+    top.clamp(plot.top, plot.bottom),
+    right.clamp(plot.left, plot.right),
+    bottom.clamp(plot.top, plot.bottom),
+  );
+
+  if (clamped.width < minPx || clamped.height < minPx) {
+    return null;
+  }
+  return clamped;
 }
 
 /// Positions a [TrackballTooltip] to the right of [crosshairX], flipping

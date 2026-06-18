@@ -1,9 +1,12 @@
 import 'package:cristalyse/cristalyse.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:vsd/domain/models/time_series.dart';
+import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd/presentation/chart/chart_crosshair.dart';
 import 'package:vsd/presentation/chart/chart_utils.dart';
+import 'package:vsd/presentation/chart/selection_box_painter.dart';
 
 class StatisticLineChart extends StatefulWidget {
   const StatisticLineChart({
@@ -22,11 +25,71 @@ class StatisticLineChart extends StatefulWidget {
 class _StatisticLineChartState extends State<StatisticLineChart> {
   double? _mouseX;
 
-  DataPoint _nearestPoint(double dataX) {
-    return widget.points.reduce((a, b) {
-      final aDist = (a.timestamp.millisecondsSinceEpoch.toDouble() - dataX).abs();
-      final bDist = (b.timestamp.millisecondsSinceEpoch.toDouble() - dataX).abs();
-      return aDist <= bDist ? a : b;
+  // Active zoom window in data coordinates; null means "show full range".
+  ({double minX, double maxX, double minY, double maxY})? _zoom;
+
+  // Transient drag state for the marquee selection box.
+  Offset? _dragStart;
+  Offset? _dragCurrent;
+  bool _dragging = false;
+
+  @override
+  void didUpdateWidget(StatisticLineChart old) {
+    super.didUpdateWidget(old);
+    // Reset zoom when the underlying series changes (different statistic /
+    // process / reload). points is identity-stable per TimeSeries instance.
+    if (!identical(old.points, widget.points) || old.points.length != widget.points.length) {
+      _zoom = null;
+    }
+  }
+
+  DataPoint? _nearestPoint(double dataX, double minX, double maxX) {
+    DataPoint? best;
+    var bestDist = double.infinity;
+    for (final p in widget.points) {
+      final px = p.timestamp.millisecondsSinceEpoch.toDouble();
+      if (px < minX || px > maxX) {
+        continue; // only snap to points inside the visible window
+      }
+      final d = (px - dataX).abs();
+      if (d < bestDist) {
+        bestDist = d;
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  void _onPanEnd(Rect plotRect, double minX, double maxX, double minY, double maxY) {
+    final start = _dragStart;
+    final current = _dragCurrent;
+    Rect? box;
+    if (start != null && current != null) {
+      box = normalizeDragBox(start, current, plotRect);
+    }
+
+    setState(() {
+      _dragStart = null;
+      _dragCurrent = null;
+      _dragging = false;
+      if (box == null) {
+        return; // click / sliver — not a zoom
+      }
+      final newMinX = pixelToDataX(box.left, plotRect, minX, maxX);
+      final newMaxX = pixelToDataX(box.right, plotRect, minX, maxX);
+      // Top pixel = max value, bottom pixel = min value.
+      final newMaxY = pixelToDataY(box.top, plotRect, minY, maxY);
+      final newMinY = pixelToDataY(box.bottom, plotRect, minY, maxY);
+
+      // Reject a window that contains no data points.
+      final hasPoints = widget.points.any((p) {
+        final px = p.timestamp.millisecondsSinceEpoch.toDouble();
+        return px >= newMinX && px <= newMaxX;
+      });
+      if (!hasPoints || newMaxX <= newMinX || newMaxY <= newMinY) {
+        return;
+      }
+      _zoom = (minX: newMinX, maxX: newMaxX, minY: newMinY, maxY: newMaxY);
     });
   }
 
@@ -37,17 +100,25 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
     }
 
     final timeFormatter = DateFormat('HH:mm:ss');
-    final yValues = widget.points.map((p) => p.value).toList();
-    final minY = yValues.reduce((a, b) => a < b ? a : b);
-    final maxY = yValues.reduce((a, b) => a > b ? a : b);
-    final range = maxY - minY;
-    final padding = range > 0 ? range * 0.1 : 1.0;
-    final displayMinY = minY >= 0 ? (minY - padding).clamp(0, minY) : minY - padding;
-    final displayMaxY = maxY + padding;
-    final yTicks = buildChartTicks(displayMinY, displayMaxY);
 
-    final minX = widget.points.first.timestamp.millisecondsSinceEpoch.toDouble();
-    final maxX = widget.points.last.timestamp.millisecondsSinceEpoch.toDouble();
+    // Full data-derived bounds (with padding) used when not zoomed.
+    final yValues = widget.points.map((p) => p.value).toList();
+    final dataMinY = yValues.reduce((a, b) => a < b ? a : b);
+    final dataMaxY = yValues.reduce((a, b) => a > b ? a : b);
+    final range = dataMaxY - dataMinY;
+    final padding = range > 0 ? range * 0.1 : 1.0;
+    final fullMinY = (dataMinY >= 0 ? (dataMinY - padding).clamp(0, dataMinY) : dataMinY - padding).toDouble();
+    final fullMaxY = (dataMaxY + padding).toDouble();
+    final fullMinX = widget.points.first.timestamp.millisecondsSinceEpoch.toDouble();
+    final fullMaxX = widget.points.last.timestamp.millisecondsSinceEpoch.toDouble();
+
+    // Active bounds: exact zoom box when zoomed (bypasses padding / clamp).
+    final minX = _zoom?.minX ?? fullMinX;
+    final maxX = _zoom?.maxX ?? fullMaxX;
+    final displayMinY = _zoom?.minY ?? fullMinY;
+    final displayMaxY = _zoom?.maxY ?? fullMaxY;
+
+    final yTicks = buildChartTicks(displayMinY, displayMaxY);
 
     final chartData = List.generate(
       widget.points.length,
@@ -72,8 +143,8 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
         )
         .scaleYContinuous(
           labels: chartTickFormatter(yTicks),
-          min: displayMinY.toDouble(),
-          max: displayMaxY.toDouble(),
+          min: displayMinY,
+          max: displayMaxY,
           tickConfig: TickConfig(ticks: yTicks),
         )
         .build();
@@ -81,6 +152,7 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
     final sampleXLabel = timeFormatter.format(widget.points.last.timestamp);
 
     return MouseRegion(
+      cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,
       onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
       onExit: (_) => setState(() => _mouseX = null),
       child: LayoutBuilder(
@@ -92,42 +164,95 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
           DataPoint? hoveredPoint;
           List<({Offset position, Color color})> dots = const [];
 
-          if (_mouseX != null && plotRect.width > 0) {
-            final dataX = minX + (_mouseX! - plotRect.left) / plotRect.width * (maxX - minX);
-            hoveredPoint = _nearestPoint(dataX);
-            final snappedMs = hoveredPoint.timestamp.millisecondsSinceEpoch.toDouble();
-            crosshairX = plotRect.left + (snappedMs - minX) / (maxX - minX) * plotRect.width;
-            final yRange = displayMaxY - displayMinY;
-            final dotY = yRange > 0
-                ? plotRect.top + (1.0 - (hoveredPoint.value - displayMinY) / yRange) * plotRect.height
-                : plotRect.top + plotRect.height / 2;
-            dots = [(position: Offset(crosshairX, dotY), color: const Color(0xFF0078A8))];
+          if (!_dragging && _mouseX != null && plotRect.width > 0) {
+            final dataX = pixelToDataX(_mouseX!, plotRect, minX, maxX);
+            hoveredPoint = _nearestPoint(dataX, minX, maxX);
+            if (hoveredPoint != null) {
+              final snappedMs = hoveredPoint.timestamp.millisecondsSinceEpoch.toDouble();
+              crosshairX = plotRect.left + (snappedMs - minX) / (maxX - minX) * plotRect.width;
+              final yRange = displayMaxY - displayMinY;
+              final dotY = yRange > 0
+                  ? plotRect.top + (1.0 - (hoveredPoint.value - displayMinY) / yRange) * plotRect.height
+                  : plotRect.top + plotRect.height / 2;
+              dots = [(position: Offset(crosshairX, dotY), color: const Color(0xFF0078A8))];
+            }
           }
 
-          return Stack(
-            children: [
-              chart,
-              if (crosshairX != null)
-                IgnorePointer(
-                  child: SizedBox.fromSize(
-                    size: size,
-                    child: CustomPaint(
-                      painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
+          final selectionBox = (_dragging && _dragStart != null && _dragCurrent != null)
+              ? Rect.fromPoints(_dragStart!, _dragCurrent!)
+              : null;
+
+          final gestureLayer = GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onDoubleTap: _zoom == null ? null : () => setState(() => _zoom = null),
+            onPanStart: (details) {
+              _dragStart = details.localPosition;
+              _dragCurrent = details.localPosition;
+            },
+            onPanUpdate: (details) => setState(() {
+              _dragCurrent = details.localPosition;
+              if (!_dragging && (details.localPosition - _dragStart!).distance > kDragThreshold) {
+                _dragging = true;
+              }
+            }),
+            onPanEnd: (_) => _onPanEnd(plotRect, minX, maxX, displayMinY, displayMaxY),
+            onPanCancel: () => setState(() {
+              _dragStart = null;
+              _dragCurrent = null;
+              _dragging = false;
+            }),
+            child: Stack(
+              children: [
+                chart,
+                if (crosshairX != null)
+                  IgnorePointer(
+                    child: SizedBox.fromSize(
+                      size: size,
+                      child: CustomPaint(
+                        painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
+                      ),
                     ),
                   ),
-                ),
-              if (hoveredPoint != null && crosshairX != null)
-                buildPositionedTooltip(
-                  entries: [
-                    (
-                      name: widget.statisticName,
-                      value: hoveredPoint.value,
-                      color: const Color(0xFF0078A8),
+                if (selectionBox != null)
+                  IgnorePointer(
+                    child: SizedBox.fromSize(
+                      size: size,
+                      child: CustomPaint(
+                        painter: SelectionBoxPainter(box: selectionBox),
+                      ),
                     ),
-                  ],
-                  timestamp: hoveredPoint.timestamp,
-                  crosshairX: crosshairX,
-                  size: size,
+                  ),
+                if (hoveredPoint != null && crosshairX != null)
+                  buildPositionedTooltip(
+                    entries: [
+                      (
+                        name: widget.statisticName,
+                        value: hoveredPoint.value,
+                        color: const Color(0xFF0078A8),
+                      ),
+                    ],
+                    timestamp: hoveredPoint.timestamp,
+                    crosshairX: crosshairX,
+                    size: size,
+                  ),
+              ],
+            ),
+          );
+
+          // The reset button is a sibling ABOVE the gesture layer so its tap is
+          // handled immediately, not held by the chart's double-tap recognizer.
+          return Stack(
+            children: [
+              gestureLayer,
+              if (_zoom != null)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: ToolIconButton(
+                    icon: FontAwesomeIcons.magnifyingGlassMinus,
+                    tooltip: 'Reset zoom',
+                    onTap: () => setState(() => _zoom = null),
+                  ),
                 ),
             ],
           );
