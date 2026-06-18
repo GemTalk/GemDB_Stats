@@ -11,12 +11,12 @@ class AiMessage {
 
   /// Creates a tool call history entry.
   AiMessage.toolCall(String activity)
-      : text = activity,
-        isUser = false,
-        isStreaming = false,
-        isIntermediate = false,
-        stream = null,
-        toolActivity = activity;
+    : text = activity,
+      isUser = false,
+      isStreaming = false,
+      isIntermediate = false,
+      stream = null,
+      toolActivity = activity;
 
   /// The message content. May grow incrementally while [isStreaming] is true.
   final String text;

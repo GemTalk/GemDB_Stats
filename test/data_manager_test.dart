@@ -17,7 +17,7 @@ void main() {
       // SessionId, CacheSerialNum) which aren't statistics.
       final linux = statTypes[128];
       expect(linux, isNotNull);
-      expect(linux!.statistics.length, 56-6);
+      expect(linux!.statistics.length, 56 - 6);
     });
 
     test('parseUtcOffsetMs reads the header timezone offset', () {

@@ -102,9 +102,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
       return true;
     }
     for (var i = 0; i < a.length; i++) {
-      if (a[i].name != b[i].name ||
-          !identical(a[i].points, b[i].points) ||
-          a[i].points.length != b[i].points.length) {
+      if (a[i].name != b[i].name || !identical(a[i].points, b[i].points) || a[i].points.length != b[i].points.length) {
         return true;
       }
     }

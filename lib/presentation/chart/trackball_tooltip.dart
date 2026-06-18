@@ -11,9 +11,8 @@ class TrackballTooltip extends StatelessWidget {
   final DateTime timestamp;
   final List<({String name, num value, Color color})> entries;
 
-  static String _formatValue(num value) => value is double
-      ? NumberFormat('#,##0.000').format(value)
-      : NumberFormat('#,##0').format(value);
+  static String _formatValue(num value) =>
+      value is double ? NumberFormat('#,##0.000').format(value) : NumberFormat('#,##0').format(value);
 
   @override
   Widget build(BuildContext context) {

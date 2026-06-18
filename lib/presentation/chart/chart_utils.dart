@@ -47,13 +47,14 @@ List<double> buildChartTicks(num min, num max) {
   final rawStep = span / 5;
   final magnitude = math.pow(10, (math.log(rawStep) / math.ln10).floor());
   final normalized = rawStep / magnitude;
-  final niceStep = (normalized <= 1.5
+  final niceStep =
+      (normalized <= 1.5
           ? 1
           : normalized <= 3.5
-              ? 2
-              : normalized <= 7.5
-                  ? 5
-                  : 10) *
+          ? 2
+          : normalized <= 7.5
+          ? 5
+          : 10) *
       magnitude;
 
   final firstTick = (min / niceStep).ceil() * niceStep;
@@ -98,17 +99,15 @@ Rect computePlotRect(
     textDirection: ui.TextDirection.ltr,
   )..layout();
 
-  const base = 8.0;   // theme.padding
-  const axisW = 2.0;  // axisWidth * 2 (tick extent)
-  const tickG = 4.0;  // tickToLabelSpacing
-  const l2t = 8.0;    // _labelToTitleSpacing
-  const tfs = 13.0;   // title font size (axisLabelStyle.fontSize + 1)
+  const base = 8.0; // theme.padding
+  const axisW = 2.0; // axisWidth * 2 (tick extent)
+  const tickG = 4.0; // tickToLabelSpacing
+  const l2t = 8.0; // _labelToTitleSpacing
+  const tfs = 13.0; // title font size (axisLabelStyle.fontSize + 1)
 
   final leftPad = base + axisW + tickG + maxLabelW(primaryTicks);
   // Single-axis: right side has no secondary axis, only base padding.
-  final rightPad = secondaryTicks.isEmpty
-      ? base
-      : base + axisW + tickG + maxLabelW(secondaryTicks);
+  final rightPad = secondaryTicks.isEmpty ? base : base + axisW + tickG + maxLabelW(secondaryTicks);
   final bottomPad = base + axisW + tickG + xTp.height + l2t + tfs;
 
   return Rect.fromLTWH(

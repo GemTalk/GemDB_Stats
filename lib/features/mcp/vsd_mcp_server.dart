@@ -17,10 +17,10 @@ class VsdMcpServer {
     required McpClient client,
     required StreamController<List<int>> toServer,
     required StreamController<List<int>> toClient,
-  })  : _server = server,
-        _client = client,
-        _toServer = toServer,
-        _toClient = toClient;
+  }) : _server = server,
+       _client = client,
+       _toServer = toServer,
+       _toClient = toClient;
 
   final McpServer _server;
   final McpClient _client;
@@ -81,13 +81,13 @@ class VsdMcpServer {
   Future<CallToolResult> callTool(
     String name,
     Map<String, dynamic> args,
-  ) =>
-      _client.callTool(CallToolRequest(name: name, arguments: args));
+  ) => _client.callTool(CallToolRequest(name: name, arguments: args));
 
   static void _registerTools(McpServer s) {
     s.registerTool(
       VsdTools.listProcesses,
-      description: 'List all loaded processes with their name, stat type, '
+      description:
+          'List all loaded processes with their name, stat type, '
           'process ID, session ID, time range, and sample count.',
       inputSchema: JsonObject(),
       callback: (args, extra) async {
@@ -112,8 +112,7 @@ class VsdMcpServer {
             description: 'Optional process ID (omit or null if not applicable).',
           ),
           'session_id': JsonInteger(
-            description:
-                'Optional session ID (omit or null if not applicable).',
+            description: 'Optional session ID (omit or null if not applicable).',
           ),
         },
         required: ['process_name', 'stat_type_id'],

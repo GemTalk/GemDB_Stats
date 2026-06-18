@@ -170,12 +170,14 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
                   setState(() {
                     _messages[_messages.length - 1] = last.copyWith(isStreaming: false, isIntermediate: true);
                     _messages.add(AiMessage.toolCall(message));
-                    _messages.add(AiMessage(
-                      text: '',
-                      isUser: false,
-                      isStreaming: true,
-                      stream: _currentStreamController!.stream,
-                    ));
+                    _messages.add(
+                      AiMessage(
+                        text: '',
+                        isUser: false,
+                        isStreaming: true,
+                        stream: _currentStreamController!.stream,
+                      ),
+                    );
                   });
                 } else {
                   setState(() {
@@ -282,8 +284,7 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
           ),
           const Spacer(),
-          if (_isSending)
-            ToolIconButton(icon: FontAwesomeIcons.stop, tooltip: 'Stop', onTap: _stopStreaming),
+          if (_isSending) ToolIconButton(icon: FontAwesomeIcons.stop, tooltip: 'Stop', onTap: _stopStreaming),
           ToolIconButton(
             icon: FontAwesomeIcons.key,
             tooltip: 'Set API key',
