@@ -280,16 +280,12 @@ class _HomePageState extends State<HomePage> {
                   });
                 },
               )
-            : _buildEmptyState(),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Text(
-        'Select a process to view statistics',
-        style: TextStyle(fontSize: 13),
+            : Center(
+                child: Text(
+                  'Select a process to view statistics',
+                  style: TextStyle(fontSize: 13, color: Colors.black45),
+                ),
+              ),
       ),
     );
   }

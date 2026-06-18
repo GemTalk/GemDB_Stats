@@ -184,6 +184,9 @@ class _ProcessTableState extends State<ProcessTable> {
 
   @override
   Widget build(BuildContext context) {
+    if (_allProcesses.isEmpty) {
+      return emptyState();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -269,6 +272,34 @@ class _ProcessTableState extends State<ProcessTable> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget emptyState() {
+    return const ColoredBox(
+      color: Colors.white,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.insert_drive_file_outlined,
+              size: 48,
+              color: Colors.black26,
+            ),
+            SizedBox(height: 12),
+            Text(
+              'No file opened',
+              style: TextStyle(fontSize: 15, color: Colors.black45, fontWeight: FontWeight.w500),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Open a file to view processes',
+              style: TextStyle(fontSize: 13, color: Colors.black45),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
