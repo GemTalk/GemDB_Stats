@@ -49,7 +49,7 @@ void main() {
       dm.statistics.addAll(statisticsMap);
 
       final progress = <double>[];
-      await dm.loadFromFile('data/statmon76637.out', onProgress: progress.add);
+      await dm.loadFromFile('test/test_data/statmon76637.out', onProgress: progress.add);
 
       expect(progress, isNotEmpty);
       expect(dm.statTypes, isNotEmpty);
