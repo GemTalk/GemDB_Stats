@@ -137,6 +137,22 @@ double pixelToDataY(double py, Rect plot, double minY, double maxY) {
   return minY + (1.0 - (py - plot.top) / plot.height) * (maxY - minY);
 }
 
+/// Converts a data-x value to its horizontal pixel position — the forward of
+/// [pixelToDataX], used to place crosshair/dot overlays on the chart.
+///
+/// When the x range is degenerate ([maxX] == [minX] — every visible sample
+/// shares one timestamp, e.g. a capture spanning under a second, since sample
+/// times have 1-second resolution) there is no meaningful horizontal position,
+/// so the plot's horizontal center is returned rather than dividing 0/0 into a
+/// NaN that would crash CustomPaint.
+double dataXToPixel(double dataX, Rect plot, double minX, double maxX) {
+  final range = maxX - minX;
+  if (range <= 0) {
+    return plot.left + plot.width / 2;
+  }
+  return plot.left + (dataX - minX) / range * plot.width;
+}
+
 /// Normalizes a drag from [a] to [b] into an axis-aligned rectangle clamped to
 /// [plot]. Returns null when either side is shorter than [minPx] — the gesture
 /// was a click or an accidental sliver, not a zoom box. Normalizing handles

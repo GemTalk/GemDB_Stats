@@ -397,7 +397,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
             if (snappedDataX != null) {
               hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
               hoveredEntries = _findHoveredEntries(snappedDataX, validSeries, minX, maxX);
-              crosshairX = plotRect.left + (snappedDataX - minX) / (maxX - minX) * plotRect.width;
+              crosshairX = dataXToPixel(snappedDataX, plotRect, minX, maxX);
 
               final yRange = displayMaxY - displayMinY;
               dots = hoveredEntries.map((entry) {
@@ -554,7 +554,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
             if (snappedDataX != null) {
               hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
               hoveredEntries = _findHoveredEntries(snappedDataX, allValid, minX, maxX);
-              crosshairX = plotArea.left + (snappedDataX - minX) / (maxX - minX) * plotArea.width;
+              crosshairX = dataXToPixel(snappedDataX, plotArea, minX, maxX);
 
               dots = hoveredEntries.map((entry) {
                 final isPrimary = primarySeriesNames.contains(entry.name);

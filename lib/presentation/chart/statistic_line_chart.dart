@@ -169,7 +169,7 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
             hoveredPoint = _nearestPoint(dataX, minX, maxX);
             if (hoveredPoint != null) {
               final snappedMs = hoveredPoint.timestamp.millisecondsSinceEpoch.toDouble();
-              crosshairX = plotRect.left + (snappedMs - minX) / (maxX - minX) * plotRect.width;
+              crosshairX = dataXToPixel(snappedMs, plotRect, minX, maxX);
               final yRange = displayMaxY - displayMinY;
               final dotY = yRange > 0
                   ? plotRect.top + (1.0 - (hoveredPoint.value - displayMinY) / yRange) * plotRect.height

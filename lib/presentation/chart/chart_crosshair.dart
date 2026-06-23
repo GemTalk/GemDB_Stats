@@ -11,7 +11,8 @@ class CrosshairPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (xPosition == null) {
+    final x = xPosition;
+    if (x == null || !x.isFinite) {
       return;
     }
 
@@ -23,14 +24,17 @@ class CrosshairPainter extends CustomPainter {
     double y = 0;
     while (y < size.height) {
       canvas.drawLine(
-        Offset(xPosition!, y),
-        Offset(xPosition!, (y + dashHeight).clamp(0, size.height)),
+        Offset(x, y),
+        Offset(x, (y + dashHeight).clamp(0, size.height)),
         linePaint,
       );
       y += dashHeight + dashSpace;
     }
 
     for (final dot in dots) {
+      if (!dot.position.dx.isFinite || !dot.position.dy.isFinite) {
+        continue;
+      }
       canvas.drawCircle(
         dot.position,
         5.0,
