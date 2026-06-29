@@ -275,6 +275,15 @@ class DataManager {
       }
 
       if (existingProcess != null) {
+        // Samples for a process are expected to be strictly increasing in time.
+        // statmonitor can occasionally emit an out-of-order or duplicate record
+        // (e.g. a stale sample re-appended at the end of the file); skip it so
+        // the sample count stays accurate and the chart's domain (which assumes
+        // points are chronologically ordered) isn't collapsed by a rogue point.
+        if (timestampMs <= existingProcess.endTime.millisecondsSinceEpoch) {
+          continue;
+        }
+
         // Update end time if process already exists (handles multiple entries for same process)
         existingProcess.endTime = timestamp;
         existingProcess.samples += 1;

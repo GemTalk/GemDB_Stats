@@ -83,5 +83,29 @@ void main() {
         expect(s.points.first.value, isA<int>());
       }
     });
+
+    test('drops out-of-order/duplicate samples so every process is monotonic', () async {
+      final dm = DataManager();
+      dm.statistics.addAll(statisticsMap);
+      await dm.loadFromFile('test/test_data/statmon76637.out');
+
+      // The file carries a rogue trailing gs64stone record whose timestamp
+      // equals the first sample's, appended after the final sample. It must be
+      // dropped: every process keeps a consistent sample count, and each
+      // statistic's timestamps stay strictly increasing (so the chart's
+      // first/last-as-domain assumption holds).
+      for (final process in dm.allProcesses) {
+        for (final ts in process.statisticData.values) {
+          expect(ts.points.length, process.samples);
+          final timestamps = ts.points.map((p) => p.timestamp).toList();
+          for (int i = 1; i < timestamps.length; i++) {
+            expect(timestamps[i].isAfter(timestamps[i - 1]), isTrue);
+          }
+        }
+      }
+
+      final stone = dm.allProcesses.firstWhere((p) => p.name == 'gs64stone');
+      expect(stone.samples, 38);
+    });
   });
 }
