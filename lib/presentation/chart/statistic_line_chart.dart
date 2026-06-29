@@ -23,7 +23,10 @@ class StatisticLineChart extends StatefulWidget {
 }
 
 class _StatisticLineChartState extends State<StatisticLineChart> {
-  double? _mouseX;
+  // Hover x in local pixels. A ValueNotifier (not setState) so a pointer move
+  // repaints only the crosshair/tooltip overlay — never rebuilds or repaints
+  // the chart, whose Cristalyse paint is O(number of points).
+  final ValueNotifier<double?> _mouseX = ValueNotifier(null);
 
   // Active zoom window in data coordinates; null means "show full range".
   ({double minX, double maxX, double minY, double maxY})? _zoom;
@@ -34,6 +37,12 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
   bool _dragging = false;
 
   @override
+  void dispose() {
+    _mouseX.dispose();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(StatisticLineChart old) {
     super.didUpdateWidget(old);
     // Reset zoom when the underlying series changes (different statistic /
@@ -41,23 +50,6 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
     if (!identical(old.points, widget.points) || old.points.length != widget.points.length) {
       _zoom = null;
     }
-  }
-
-  DataPoint? _nearestPoint(double dataX, double minX, double maxX) {
-    DataPoint? best;
-    var bestDist = double.infinity;
-    for (final p in widget.points) {
-      final px = p.timestamp.millisecondsSinceEpoch.toDouble();
-      if (px < minX || px > maxX) {
-        continue; // only snap to points inside the visible window
-      }
-      final d = (px - dataX).abs();
-      if (d < bestDist) {
-        bestDist = d;
-        best = p;
-      }
-    }
-    return best;
   }
 
   void _onPanEnd(Rect plotRect, double minX, double maxX, double minY, double maxY) {
@@ -128,6 +120,10 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
       },
     );
 
+    // Sorted timestamps (ms), cached per real build for the O(log n) hover
+    // lookup so a pointer move never rescans/re-allocates all points.
+    final xsMs = [for (final d in chartData) d['x']!.toDouble()];
+
     final chart = CristalyseChart()
         .data(chartData)
         .mapping(x: 'x', y: 'y')
@@ -153,30 +149,12 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
 
     return MouseRegion(
       cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,
-      onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
-      onExit: (_) => setState(() => _mouseX = null),
+      onHover: (event) => _mouseX.value = event.localPosition.dx,
+      onExit: (_) => _mouseX.value = null,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
           final plotRect = computePlotRect(size, yTicks, [], sampleXLabel);
-
-          double? crosshairX;
-          DataPoint? hoveredPoint;
-          List<({Offset position, Color color})> dots = const [];
-
-          if (!_dragging && _mouseX != null && plotRect.width > 0) {
-            final dataX = pixelToDataX(_mouseX!, plotRect, minX, maxX);
-            hoveredPoint = _nearestPoint(dataX, minX, maxX);
-            if (hoveredPoint != null) {
-              final snappedMs = hoveredPoint.timestamp.millisecondsSinceEpoch.toDouble();
-              crosshairX = dataXToPixel(snappedMs, plotRect, minX, maxX);
-              final yRange = displayMaxY - displayMinY;
-              final dotY = yRange > 0
-                  ? plotRect.top + (1.0 - (hoveredPoint.value - displayMinY) / yRange) * plotRect.height
-                  : plotRect.top + plotRect.height / 2;
-              dots = [(position: Offset(crosshairX, dotY), color: const Color(0xFF0078A8))];
-            }
-          }
 
           final selectionBox = (_dragging && _dragStart != null && _dragCurrent != null)
               ? Rect.fromPoints(_dragStart!, _dragCurrent!)
@@ -203,16 +181,59 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
             }),
             child: Stack(
               children: [
-                chart,
-                if (crosshairX != null)
-                  IgnorePointer(
-                    child: SizedBox.fromSize(
-                      size: size,
-                      child: CustomPaint(
-                        painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
-                      ),
-                    ),
+                // The chart paints into its own layer so a hover never triggers
+                // its (O(N)) Cristalyse repaint — only the overlay below repaints.
+                RepaintBoundary(child: chart),
+                // Crosshair + dot + tooltip; repaint on pointer move via the
+                // ValueNotifier, isolated in their own layer.
+                RepaintBoundary(
+                  child: ValueListenableBuilder<double?>(
+                    valueListenable: _mouseX,
+                    builder: (context, mouseX, _) {
+                      if (_dragging || mouseX == null || plotRect.width <= 0) {
+                        return const SizedBox.shrink();
+                      }
+                      final dataX = pixelToDataX(mouseX, plotRect, minX, maxX);
+                      final idx = nearestInWindowIndex(xsMs, dataX, minX, maxX);
+                      if (idx == null) {
+                        return const SizedBox.shrink();
+                      }
+                      final hoveredPoint = widget.points[idx];
+                      final crosshairX = dataXToPixel(xsMs[idx], plotRect, minX, maxX);
+                      final yRange = displayMaxY - displayMinY;
+                      final dotY = yRange > 0
+                          ? plotRect.top + (1.0 - (hoveredPoint.value - displayMinY) / yRange) * plotRect.height
+                          : plotRect.top + plotRect.height / 2;
+                      return Stack(
+                        children: [
+                          IgnorePointer(
+                            child: SizedBox.fromSize(
+                              size: size,
+                              child: CustomPaint(
+                                painter: CrosshairPainter(
+                                  xPosition: crosshairX,
+                                  dots: [(position: Offset(crosshairX, dotY), color: const Color(0xFF0078A8))],
+                                ),
+                              ),
+                            ),
+                          ),
+                          buildPositionedTooltip(
+                            entries: [
+                              (
+                                name: widget.statisticName,
+                                value: hoveredPoint.value,
+                                color: const Color(0xFF0078A8),
+                              ),
+                            ],
+                            timestamp: hoveredPoint.timestamp,
+                            crosshairX: crosshairX,
+                            size: size,
+                          ),
+                        ],
+                      );
+                    },
                   ),
+                ),
                 if (selectionBox != null)
                   IgnorePointer(
                     child: SizedBox.fromSize(
@@ -221,19 +242,6 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
                         painter: SelectionBoxPainter(box: selectionBox),
                       ),
                     ),
-                  ),
-                if (hoveredPoint != null && crosshairX != null)
-                  buildPositionedTooltip(
-                    entries: [
-                      (
-                        name: widget.statisticName,
-                        value: hoveredPoint.value,
-                        color: const Color(0xFF0078A8),
-                      ),
-                    ],
-                    timestamp: hoveredPoint.timestamp,
-                    crosshairX: crosshairX,
-                    size: size,
                   ),
               ],
             ),

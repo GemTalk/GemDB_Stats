@@ -153,6 +153,47 @@ double dataXToPixel(double dataX, Rect plot, double minX, double maxX) {
   return plot.left + (dataX - minX) / range * plot.width;
 }
 
+/// Index of the in-window point whose timestamp (ms) is nearest [targetMs], or
+/// null if no point lies within `[minX, maxX]`.
+///
+/// [xs] must be sorted ascending (true for `TimeSeries.points`, appended in
+/// chronological order). Runs in O(log n): the nearest value to a target in a
+/// sorted array is always one of the two neighbors of the lower bound, so only
+/// those are checked. The in-window guard reproduces the existing "only snap to
+/// points inside the visible window" behavior; ties resolve to the earlier index.
+int? nearestInWindowIndex(List<double> xs, double targetMs, double minX, double maxX) {
+  if (xs.isEmpty) {
+    return null;
+  }
+  var lo = 0;
+  var hi = xs.length;
+  while (lo < hi) {
+    final mid = (lo + hi) >> 1;
+    if (xs[mid] < targetMs) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  int? best;
+  var bestDist = double.infinity;
+  for (final i in [lo - 1, lo]) {
+    if (i < 0 || i >= xs.length) {
+      continue;
+    }
+    final x = xs[i];
+    if (x < minX || x > maxX) {
+      continue;
+    }
+    final d = (x - targetMs).abs();
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 /// Normalizes a drag from [a] to [b] into an axis-aligned rectangle clamped to
 /// [plot]. Returns null when either side is shorter than [minPx] — the gesture
 /// was a click or an accidental sliver, not a zoom box. Normalizing handles

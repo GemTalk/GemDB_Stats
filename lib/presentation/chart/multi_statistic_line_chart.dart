@@ -70,7 +70,10 @@ class MultiStatisticLineChart extends StatefulWidget {
 }
 
 class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
-  double? _mouseX;
+  // Hover x in local pixels. A ValueNotifier (not setState) so a pointer move
+  // repaints only the crosshair/tooltip overlay — never rebuilds or repaints
+  // the chart, whose Cristalyse paint is O(number of points).
+  final ValueNotifier<double?> _mouseX = ValueNotifier(null);
 
   // Active zoom window in data coordinates; null means "show full range".
   // minY/maxY apply to the primary (left) axis, minY2/maxY2 to the secondary
@@ -81,6 +84,12 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   Offset? _dragStart;
   Offset? _dragCurrent;
   bool _dragging = false;
+
+  @override
+  void dispose() {
+    _mouseX.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(MultiStatisticLineChart old) {
@@ -109,60 +118,57 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     return false;
   }
 
-  // Finds the nearest in-window data-x value (ms since epoch) across all
-  // series, used to snap the trackball. Returns null when the visible window
-  // contains no points.
-  double? _nearestDataX(
-    double dataX,
+  // Builds the cached sorted-timestamp arrays (ms), one List<double> per series
+  // in [allValid] order, for the O(log n) hover lookup. Built once per real
+  // build (data/zoom change), never on a pointer move.
+  List<List<double>> _timestampsBySeries(
     List<({String name, List<DataPoint> points})> allValid,
-    double minX,
-    double maxX,
   ) {
-    var bestDist = double.infinity;
-    double? bestX;
-    for (final s in allValid) {
-      for (final p in s.points) {
-        final px = p.timestamp.millisecondsSinceEpoch.toDouble();
-        if (px < minX || px > maxX) {
-          continue;
-        }
-        final d = (px - dataX).abs();
-        if (d < bestDist) {
-          bestDist = d;
-          bestX = px;
-        }
-      }
-    }
-    return bestX;
+    return [
+      for (final s in allValid) [for (final p in s.points) p.timestamp.millisecondsSinceEpoch.toDouble()],
+    ];
   }
 
-  List<({String name, num value, Color color})> _findHoveredEntries(
+  // Resolves the hover overlay: the snapped data-x (nearest in-window point
+  // across all series to [dataX]) and the per-series tooltip entries at that x.
+  // Returns null when the visible window contains no points. [xsBySeries] aligns
+  // index-for-index with [allValid].
+  ({double snappedDataX, List<({String name, num value, Color color})> entries})? _resolveHover(
     double dataX,
     List<({String name, List<DataPoint> points})> allValid,
+    List<List<double>> xsBySeries,
     double minX,
     double maxX,
   ) {
-    final result = <({String name, num value, Color color})>[];
+    double? snappedDataX;
+    var bestDist = double.infinity;
     for (var i = 0; i < allValid.length; i++) {
-      final color = kMultiChartPalette[i % kMultiChartPalette.length];
-      DataPoint? nearest;
-      var bestDist = double.infinity;
-      for (final p in allValid[i].points) {
-        final px = p.timestamp.millisecondsSinceEpoch.toDouble();
-        if (px < minX || px > maxX) {
-          continue;
-        }
-        final d = (px - dataX).abs();
-        if (d < bestDist) {
-          bestDist = d;
-          nearest = p;
-        }
+      final idx = nearestInWindowIndex(xsBySeries[i], dataX, minX, maxX);
+      if (idx == null) {
+        continue;
       }
-      if (nearest != null) {
-        result.add((name: allValid[i].name, value: nearest.value, color: color));
+      final x = xsBySeries[i][idx];
+      final d = (x - dataX).abs();
+      if (d < bestDist) {
+        bestDist = d;
+        snappedDataX = x;
       }
     }
-    return result;
+    if (snappedDataX == null) {
+      return null;
+    }
+    final entries = <({String name, num value, Color color})>[];
+    for (var i = 0; i < allValid.length; i++) {
+      final idx = nearestInWindowIndex(xsBySeries[i], snappedDataX, minX, maxX);
+      if (idx != null) {
+        entries.add((
+          name: allValid[i].name,
+          value: allValid[i].points[idx].value,
+          color: kMultiChartPalette[i % kMultiChartPalette.length],
+        ));
+      }
+    }
+    return (snappedDataX: snappedDataX, entries: entries);
   }
 
   num _computePadding(num range) {
@@ -343,6 +349,9 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
 
     final bounds = _yBounds(validSeries);
 
+    // Sorted timestamps per series (ms), cached for the O(log n) hover lookup.
+    final xsBySeries = _timestampsBySeries(validSeries);
+
     final allX = allData.map((d) => d['x'] as double).toList();
     final fullMinX = allX.reduce((a, b) => a < b ? a : b);
     final fullMaxX = allX.reduce((a, b) => a > b ? a : b);
@@ -379,56 +388,62 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
 
     return MouseRegion(
       cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,
-      onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
-      onExit: (_) => setState(() => _mouseX = null),
+      onHover: (event) => _mouseX.value = event.localPosition.dx,
+      onExit: (_) => _mouseX.value = null,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
           final plotRect = computePlotRect(size, yTicks, [], sampleXLabel);
 
-          List<({String name, num value, Color color})>? hoveredEntries;
-          DateTime? hoveredTimestamp;
-          double? crosshairX;
-          List<({Offset position, Color color})> dots = const [];
-
-          if (!_dragging && _mouseX != null && plotRect.width > 0) {
-            final dataX = pixelToDataX(_mouseX!, plotRect, minX, maxX);
-            final snappedDataX = _nearestDataX(dataX, validSeries, minX, maxX);
-            if (snappedDataX != null) {
-              hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
-              hoveredEntries = _findHoveredEntries(snappedDataX, validSeries, minX, maxX);
-              crosshairX = dataXToPixel(snappedDataX, plotRect, minX, maxX);
-
-              final yRange = displayMaxY - displayMinY;
-              dots = hoveredEntries.map((entry) {
-                final entryYT = yRange > 0 ? 1.0 - (entry.value - displayMinY) / yRange : 0.5;
-                return (
-                  position: Offset(crosshairX!, plotRect.top + entryYT * plotRect.height),
-                  color: entry.color,
-                );
-              }).toList();
-            }
-          }
-
           final children = <Widget>[
-            chart,
-            if (crosshairX != null)
-              IgnorePointer(
-                child: SizedBox.fromSize(
-                  size: size,
-                  child: CustomPaint(
-                    painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
-                  ),
-                ),
+            // The chart paints into its own layer so a hover never triggers its
+            // (O(N)) Cristalyse repaint — only the overlay below repaints.
+            RepaintBoundary(child: chart),
+            // Crosshair + dots + tooltip; repaint on pointer move via the
+            // ValueNotifier, isolated in their own layer.
+            RepaintBoundary(
+              child: ValueListenableBuilder<double?>(
+                valueListenable: _mouseX,
+                builder: (context, mouseX, _) {
+                  if (_dragging || mouseX == null || plotRect.width <= 0) {
+                    return const SizedBox.shrink();
+                  }
+                  final dataX = pixelToDataX(mouseX, plotRect, minX, maxX);
+                  final hover = _resolveHover(dataX, validSeries, xsBySeries, minX, maxX);
+                  if (hover == null || hover.entries.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  final crosshairX = dataXToPixel(hover.snappedDataX, plotRect, minX, maxX);
+                  final yRange = displayMaxY - displayMinY;
+                  final dots = hover.entries.map((entry) {
+                    final entryYT = yRange > 0 ? 1.0 - (entry.value - displayMinY) / yRange : 0.5;
+                    return (
+                      position: Offset(crosshairX, plotRect.top + entryYT * plotRect.height),
+                      color: entry.color,
+                    );
+                  }).toList();
+                  return Stack(
+                    children: [
+                      IgnorePointer(
+                        child: SizedBox.fromSize(
+                          size: size,
+                          child: CustomPaint(
+                            painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
+                          ),
+                        ),
+                      ),
+                      buildPositionedTooltip(
+                        entries: hover.entries,
+                        timestamp: DateTime.fromMillisecondsSinceEpoch(hover.snappedDataX.round(), isUtc: true),
+                        crosshairX: crosshairX,
+                        size: size,
+                      ),
+                    ],
+                  );
+                },
               ),
+            ),
             ?_selectionOverlay(size),
-            if (hoveredEntries != null && hoveredEntries.isNotEmpty && hoveredTimestamp != null && crosshairX != null)
-              buildPositionedTooltip(
-                entries: hoveredEntries,
-                timestamp: hoveredTimestamp,
-                crosshairX: crosshairX,
-                size: size,
-              ),
           ];
 
           return Stack(
@@ -532,80 +547,96 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         .build();
 
     final allValid = [...validPrimary, ...validSecondary];
+    // Sorted timestamps per series (ms), cached for the O(log n) hover lookup.
+    final xsBySeries = _timestampsBySeries(allValid);
     final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true));
 
     return MouseRegion(
       cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,
-      onHover: (event) => setState(() => _mouseX = event.localPosition.dx),
-      onExit: (_) => setState(() => _mouseX = null),
+      onHover: (event) => _mouseX.value = event.localPosition.dx,
+      onExit: (_) => _mouseX.value = null,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
           final plotArea = computePlotRect(size, primTicks, secTicks, sampleXLabel);
 
-          List<({String name, num value, Color color})>? hoveredEntries;
-          DateTime? hoveredTimestamp;
-          double? crosshairX;
-          List<({Offset position, Color color})> dots = const [];
-
-          if (!_dragging && _mouseX != null && plotArea.width > 0) {
-            final dataX = pixelToDataX(_mouseX!, plotArea, minX, maxX);
-            final snappedDataX = _nearestDataX(dataX, allValid, minX, maxX);
-            if (snappedDataX != null) {
-              hoveredTimestamp = DateTime.fromMillisecondsSinceEpoch(snappedDataX.round(), isUtc: true);
-              hoveredEntries = _findHoveredEntries(snappedDataX, allValid, minX, maxX);
-              crosshairX = dataXToPixel(snappedDataX, plotArea, minX, maxX);
-
-              dots = hoveredEntries.map((entry) {
-                final isPrimary = primarySeriesNames.contains(entry.name);
-                final bMin = isPrimary ? primMinY : secMinY;
-                final bMax = isPrimary ? primMaxY : secMaxY;
-                final yRange = bMax - bMin;
-                final entryYT = yRange > 0 ? 1.0 - (entry.value - bMin) / yRange : 0.5;
-                return (
-                  position: Offset(crosshairX!, plotArea.top + entryYT * plotArea.height),
-                  color: entry.color,
-                );
-              }).toList();
-            }
-          }
+          // Static layer: the chart + dashed secondary lines. Both depend only
+          // on data/zoom, so they are wrapped in a RepaintBoundary and never
+          // repainted on a pointer move.
+          final staticLayer = RepaintBoundary(
+            child: Stack(
+              children: [
+                chart,
+                IgnorePointer(
+                  child: SizedBox.fromSize(
+                    size: size,
+                    child: CustomPaint(
+                      painter: _DashedLinesPainter(
+                        series: validSecondary,
+                        colorOffset: validPrimary.length,
+                        plotArea: plotArea,
+                        minX: minX,
+                        maxX: maxX,
+                        displayMin: secMinY,
+                        displayMax: secMaxY,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
 
           final children = <Widget>[
-            chart,
-            // Dashed secondary lines drawn on top of the Cristalyse chart.
-            IgnorePointer(
-              child: SizedBox.fromSize(
-                size: size,
-                child: CustomPaint(
-                  painter: _DashedLinesPainter(
-                    series: validSecondary,
-                    colorOffset: validPrimary.length,
-                    plotArea: plotArea,
-                    minX: minX,
-                    maxX: maxX,
-                    displayMin: secMinY,
-                    displayMax: secMaxY,
-                  ),
-                ),
+            staticLayer,
+            // Crosshair + dots + tooltip; repaint on pointer move via the
+            // ValueNotifier, isolated in their own layer.
+            RepaintBoundary(
+              child: ValueListenableBuilder<double?>(
+                valueListenable: _mouseX,
+                builder: (context, mouseX, _) {
+                  if (_dragging || mouseX == null || plotArea.width <= 0) {
+                    return const SizedBox.shrink();
+                  }
+                  final dataX = pixelToDataX(mouseX, plotArea, minX, maxX);
+                  final hover = _resolveHover(dataX, allValid, xsBySeries, minX, maxX);
+                  if (hover == null || hover.entries.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  final crosshairX = dataXToPixel(hover.snappedDataX, plotArea, minX, maxX);
+                  final dots = hover.entries.map((entry) {
+                    final isPrimary = primarySeriesNames.contains(entry.name);
+                    final bMin = isPrimary ? primMinY : secMinY;
+                    final bMax = isPrimary ? primMaxY : secMaxY;
+                    final yRange = bMax - bMin;
+                    final entryYT = yRange > 0 ? 1.0 - (entry.value - bMin) / yRange : 0.5;
+                    return (
+                      position: Offset(crosshairX, plotArea.top + entryYT * plotArea.height),
+                      color: entry.color,
+                    );
+                  }).toList();
+                  return Stack(
+                    children: [
+                      IgnorePointer(
+                        child: SizedBox.fromSize(
+                          size: size,
+                          child: CustomPaint(
+                            painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
+                          ),
+                        ),
+                      ),
+                      buildPositionedTooltip(
+                        entries: hover.entries,
+                        timestamp: DateTime.fromMillisecondsSinceEpoch(hover.snappedDataX.round(), isUtc: true),
+                        crosshairX: crosshairX,
+                        size: size,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
-            if (crosshairX != null)
-              IgnorePointer(
-                child: SizedBox.fromSize(
-                  size: size,
-                  child: CustomPaint(
-                    painter: CrosshairPainter(xPosition: crosshairX, dots: dots),
-                  ),
-                ),
-              ),
             ?_selectionOverlay(size),
-            if (hoveredEntries != null && hoveredEntries.isNotEmpty && hoveredTimestamp != null && crosshairX != null)
-              buildPositionedTooltip(
-                entries: hoveredEntries,
-                timestamp: hoveredTimestamp,
-                crosshairX: crosshairX,
-                size: size,
-              ),
           ];
 
           return Stack(
