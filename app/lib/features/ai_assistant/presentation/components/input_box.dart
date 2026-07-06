@@ -62,7 +62,7 @@ class _InputBoxState extends State<InputBox> {
               focusNode: focusNode,
               enabled: widget.ready && !widget.isSending,
               style: const TextStyle(fontSize: 13),
-              maxLines: null,
+              maxLines: 10,
               minLines: 3,
               decoration: InputDecoration(
                 hintText: widget.ready ? 'Ask about your data…' : 'Initializing…',
