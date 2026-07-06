@@ -1,0 +1,14 @@
+name: vsd_core
+description: Shared statmon data layer (parsing + models) for the VSD app and MCP server.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.8
+
+dependencies:
+  typed_data: ^1.4.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
