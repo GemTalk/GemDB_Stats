@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:multi_split_view/multi_split_view.dart';
-import 'package:vsd/domain/data_manager.dart';
-import 'package:vsd/domain/models/process.dart';
-import 'package:vsd/domain/models/time_series.dart';
 import 'package:vsd/features/ai_assistant/presentation/components/ai_assistant_panel.dart';
 import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
@@ -12,6 +9,7 @@ import 'package:vsd/presentation/file_bar.dart';
 import 'package:vsd/presentation/process_table.dart';
 import 'package:vsd/presentation/statistics_table/statistics_table.dart';
 import 'package:vsd/theme.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

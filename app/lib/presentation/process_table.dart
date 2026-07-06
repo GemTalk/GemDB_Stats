@@ -2,10 +2,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide SearchBar;
 import 'package:intl/intl.dart';
 import 'package:pluto_grid/pluto_grid.dart';
-import 'package:vsd/domain/data_manager.dart';
-import 'package:vsd/domain/models/process.dart';
 import 'package:vsd/presentation/_reusable_components/case_insensitive_text_type.dart';
 import 'package:vsd/presentation/_reusable_components/search_bar.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 class ProcessTable extends StatefulWidget {
   const ProcessTable({super.key, this.onProcessSelected, this.showYear = true});

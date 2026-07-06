@@ -1,12 +1,9 @@
 import 'package:anthropic_sdk_dart/anthropic_sdk_dart.dart' as anthropic;
 import 'package:mcp_dart/mcp_dart.dart' as mcp;
-import 'package:vsd/domain/data_manager.dart';
-import 'package:vsd/domain/models/file_time.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_message.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_stream_events.dart';
-import 'package:vsd/features/mcp/helpers.dart';
-import 'package:vsd/features/mcp/tool_list.dart';
-import 'package:vsd/features/mcp/vsd_mcp_server.dart';
+import 'package:vsd_core/vsd_core.dart';
+import 'package:vsd_mcp/vsd_mcp.dart';
 
 /// Drives the agentic loop between the user, Claude, and the [VsdMcpServer].
 ///

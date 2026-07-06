@@ -1,9 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vsd/domain/models/time_series.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
 import 'package:vsd/presentation/chart/statistic_line_chart.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 List<DataPoint> _points({int count = 20}) {
   final base = DateTime.utc(2026, 1, 1, 12);

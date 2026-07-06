@@ -10,8 +10,8 @@ import 'package:vsd/features/ai_assistant/presentation/components/ai_key_setup_v
 import 'package:vsd/features/ai_assistant/presentation/components/ai_messages_body.dart';
 import 'package:vsd/features/ai_assistant/presentation/components/input_box.dart';
 import 'package:vsd/features/ai_assistant/presentation/utils/replay_stream_controller.dart';
-import 'package:vsd/features/mcp/vsd_mcp_server.dart';
 import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
+import 'package:vsd_mcp/vsd_mcp.dart';
 
 const _kApiKeyPref = 'anthropic_api_key';
 

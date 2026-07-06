@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:vsd/domain/data_manager.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_message.dart';
 import 'package:vsd/features/ai_assistant/presentation/components/message_bubble.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 class AiMessagesBody extends StatelessWidget {
   const AiMessagesBody({required this.messages, required this.ready, this.initializationError, super.key});

@@ -1,10 +1,10 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vsd/domain/models/time_series.dart';
 import 'package:vsd/presentation/chart/chart_utils.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
 import 'package:vsd/presentation/chart/statistic_line_chart.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 // Two samples sharing one timestamp. Sample times have 1-second resolution
 // (data_manager stores `seconds * 1000`), so any capture spanning under a

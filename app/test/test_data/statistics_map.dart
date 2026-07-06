@@ -1,4 +1,4 @@
-import 'package:vsd/domain/models/statistic.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 // Used in tests to provide a set of statistics for testing purposes
 final Map<String, Statistic> statisticsMap = {

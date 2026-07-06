@@ -1,6 +1,4 @@
-import 'package:vsd/domain/data_manager.dart';
-import 'package:vsd/domain/models/file_time.dart';
-import 'package:vsd/domain/models/time_series.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 /// Returns time-series data for a specific statistic on a process.
 /// Downsamples to [maxPoints] points if the raw series is longer.

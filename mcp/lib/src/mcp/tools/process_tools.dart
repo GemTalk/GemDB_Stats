@@ -1,5 +1,4 @@
-import 'package:vsd/domain/data_manager.dart';
-import 'package:vsd/domain/models/file_time.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 /// Returns a list of all loaded processes with metadata.
 Map<String, dynamic> executeListProcesses() {

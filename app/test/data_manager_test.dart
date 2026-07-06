@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vsd/domain/data_manager.dart';
-import 'package:vsd/domain/models/file_time.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 import 'test_data/statistics_map.dart';
 import 'test_data/test_statmon.dart';

@@ -2,11 +2,11 @@ import 'package:cristalyse/cristalyse.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:vsd/domain/models/time_series.dart';
 import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd/presentation/chart/chart_crosshair.dart';
 import 'package:vsd/presentation/chart/chart_utils.dart';
 import 'package:vsd/presentation/chart/selection_box_painter.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 class StatisticLineChart extends StatefulWidget {
   const StatisticLineChart({
