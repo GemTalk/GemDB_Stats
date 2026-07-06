@@ -859,7 +859,7 @@ packages:
     source: hosted
     version: "0.5.2"
   typed_data:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: typed_data
       sha256: f9049c039ebfeb4cf7a7104a675823cd72dba8297f264b6637062516699fa006
@@ -994,6 +994,20 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "15.2.0"
+  vsd_core:
+    dependency: "direct main"
+    description:
+      path: "../core"
+      relative: true
+    source: path
+    version: "0.1.0"
+  vsd_mcp:
+    dependency: "direct main"
+    description:
+      path: "../mcp"
+      relative: true
+    source: path
+    version: "0.1.0"
   watcher:
     dependency: transitive
     description:

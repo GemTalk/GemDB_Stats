@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
-import 'package:flutter/services.dart';
-import 'package:vsd/domain/models/file_time.dart';
-import 'package:vsd/domain/models/process.dart';
-import 'package:vsd/domain/models/stat_type.dart';
-import 'package:vsd/domain/models/statistic.dart';
-import 'package:vsd/domain/models/time_series.dart';
+import 'package:vsd_core/src/models/file_time.dart';
+import 'package:vsd_core/src/models/process.dart';
+import 'package:vsd_core/src/models/stat_type.dart';
+import 'package:vsd_core/src/models/statistic.dart';
+import 'package:vsd_core/src/models/time_series.dart';
+import 'package:vsd_core/src/stat_definitions.g.dart';
 
 class DataManager {
   factory DataManager() {
@@ -86,9 +87,13 @@ class DataManager {
     }
   }
 
-  /// Load and parse statistics definitions from vsd.stats.tcl
+  /// Load and parse statistics definitions from the embedded vsd.stats.tcl.
+  ///
+  /// The definitions ship base64-encoded in [statDefinitionsB64] so this
+  /// pure-Dart package needs no Flutter asset bundle. See
+  /// `tool/gen_stat_definitions.dart` to regenerate.
   Future<void> loadStatistics() async {
-    final content = await rootBundle.loadString('assets/vsd.stats.tcl');
+    final content = utf8.decode(base64.decode(statDefinitionsB64));
 
     // Parse statDocs for descriptions
     final Map<String, String> statDocs = {};

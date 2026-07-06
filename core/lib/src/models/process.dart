@@ -1,6 +1,6 @@
-import 'package:vsd/domain/models/file_time.dart';
-import 'package:vsd/domain/models/stat_type.dart';
-import 'package:vsd/domain/models/time_series.dart';
+import 'package:vsd_core/src/models/file_time.dart';
+import 'package:vsd_core/src/models/stat_type.dart';
+import 'package:vsd_core/src/models/time_series.dart';
 
 class Process {
   Process({

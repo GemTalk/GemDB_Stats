@@ -2,7 +2,7 @@ import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:typed_data/typed_data.dart';
-import 'package:vsd/domain/models/statistic.dart';
+import 'package:vsd_core/src/models/statistic.dart';
 
 class DataPoint {
   DataPoint({required this.timestamp, required this.value});
