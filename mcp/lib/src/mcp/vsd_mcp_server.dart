@@ -102,11 +102,30 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
   s.registerTool(
     VsdTools.listProcesses,
     description:
-        'List all loaded processes with their name, stat type, '
-        'process ID, session ID, time range, and sample count.',
-    inputSchema: JsonObject(),
+        'List loaded processes with their name, stat type, process ID, '
+        'session ID, time range, and sample count. Datasets can contain '
+        'thousands of process instances, so use name_filter to search for '
+        'specific processes or sessions; at most `limit` entries are '
+        'returned, alongside the total match count.',
+    inputSchema: JsonObject(
+      properties: {
+        'name_filter': JsonString(
+          description:
+              'Case-insensitive substring to match against process names '
+              '(e.g. "mfc" matches "mfc-1" and "MFC-2").',
+        ),
+        'limit': JsonInteger(
+          description: 'Maximum number of processes to return (default 100).',
+        ),
+      },
+    ),
     callback: (args, extra) async {
-      return CallToolResult.fromStructuredContent(executeListProcesses());
+      return CallToolResult.fromStructuredContent(
+        executeListProcesses(
+          nameFilter: args['name_filter'] as String?,
+          limit: args['limit'] as int? ?? 100,
+        ),
+      );
     },
   );
 
