@@ -36,6 +36,29 @@ void main() {
       final processes = result['processes'] as List;
       expect(processes, isNotEmpty);
       expect(processes.first, containsPair('name', isA<String>()));
+      expect(result['total_matching'], DataManager().allProcesses.length);
+    });
+
+    test('list_processes filters by name and caps results', () {
+      final all = executeListProcesses();
+      final total = all['total_matching'] as int;
+
+      final capped = executeListProcesses(limit: 1);
+      expect((capped['processes'] as List).length, 1);
+      expect(capped['returned'], 1);
+      expect(capped['total_matching'], total);
+      if (total > 1) {
+        expect(capped['note'], contains('Showing 1 of $total'));
+      }
+
+      final name = ((all['processes'] as List).first as Map)['name'] as String;
+      final filtered = executeListProcesses(nameFilter: name.toUpperCase());
+      final filteredNames = (filtered['processes'] as List).map((p) => (p as Map)['name']);
+      expect(filteredNames, contains(name));
+
+      final none = executeListProcesses(nameFilter: 'no-such-process-xyz');
+      expect(none['total_matching'], 0);
+      expect(none['processes'], isEmpty);
     });
 
     test('get_dataset_overview summarizes the dataset', () {

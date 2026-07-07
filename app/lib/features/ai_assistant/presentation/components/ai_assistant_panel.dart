@@ -224,23 +224,39 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
     if (!mounted) {
       return;
     }
+    final last = _messages.isNotEmpty && !_messages.last.isUser ? _messages.last : null;
+    final hasPriorContent = _messages.length >= 2 && !_messages[_messages.length - 2].isUser;
+
+    // The bubble renders from its stream, not from message.text, so closing
+    // text (errors, fallbacks) must be pushed into the stream before it
+    // closes or it will never be displayed.
+    String? closingText;
+    if (last != null) {
+      if (errorText != null) {
+        closingText = last.text.isEmpty ? '⚠ $errorText' : '\n\n⚠ $errorText';
+      } else if (last.text.isEmpty && !hasPriorContent) {
+        closingText = '(no response)';
+      }
+    }
+    if (closingText != null) {
+      _currentStreamController?.add(closingText);
+    }
     unawaited(_currentStreamController?.close());
     _currentStreamController = null;
+
     setState(() {
       _isSending = false;
-      if (_messages.isNotEmpty && !_messages.last.isUser) {
-        final last = _messages.last;
-        final hasPriorContent = _messages.length >= 2 && !_messages[_messages.length - 2].isUser;
-        if (errorText != null) {
-          final finalText = last.text.isEmpty ? '⚠ $errorText' : last.text;
-          _messages[_messages.length - 1] = last.copyWith(text: finalText, isStreaming: false);
-        } else if (last.text.isEmpty && hasPriorContent) {
-          // Empty placeholder left after tool calls — remove it.
-          _messages.removeLast();
-        } else {
-          final finalText = last.text.isEmpty ? '(no response)' : last.text;
-          _messages[_messages.length - 1] = last.copyWith(text: finalText, isStreaming: false);
-        }
+      if (last == null) {
+        return;
+      }
+      if (last.text.isEmpty && closingText == null) {
+        // Empty placeholder left after tool calls — remove it.
+        _messages.removeLast();
+      } else {
+        _messages[_messages.length - 1] = last.copyWith(
+          text: last.text + (closingText ?? ''),
+          isStreaming: false,
+        );
       }
     });
   }

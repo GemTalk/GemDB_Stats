@@ -31,6 +31,11 @@ class AiService {
   static const _maxTokens = 4096;
   static const _maxIterations = 10;
 
+  /// Hard cap on a single tool result. Oversized results (e.g. an
+  /// unfiltered process listing) would otherwise blow the API context
+  /// limit on the follow-up request.
+  static const _maxToolResultChars = 100000;
+
   void dispose() {
     _client.close();
   }
@@ -102,7 +107,14 @@ class AiService {
 
             try {
               final result = await _mcpServer.callTool(block.name, block.input);
-              final resultText = extractToolResultText(result);
+              var resultText = extractToolResultText(result);
+              if (resultText.length > _maxToolResultChars) {
+                resultText =
+                    '${resultText.substring(0, _maxToolResultChars)}\n'
+                    '… [truncated: full result was ${resultText.length} '
+                    'characters. Re-run the tool with filters or a lower '
+                    'limit to narrow the query.]';
+              }
               toolResultBlocks.add(
                 anthropic.InputContentBlock.toolResultText(
                   toolUseId: block.id,
@@ -265,10 +277,15 @@ class AiService {
       return buf.toString();
     }
 
+    const maxNames = 50;
+    final names = dm.processes.keys.toList();
+    final shownNames = names.take(maxNames).join(', ');
+    final nameSuffix = names.length > maxNames ? ', … and ${names.length - maxNames} more (use list_processes with name_filter to search)' : '';
+
     buf
       ..writeln()
       ..writeln('## Currently Loaded Data')
-      ..writeln('Process names: ${dm.processes.keys.join(', ')}')
+      ..writeln('Process names: $shownNames$nameSuffix')
       ..writeln('Total process instances: ${dm.allProcesses.length}')
       ..writeln(
         'Stat types: ${dm.statTypes.values.map((t) => t.name).toSet().join(', ')}',
