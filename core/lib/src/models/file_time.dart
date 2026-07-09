@@ -16,4 +16,18 @@ class FileTime {
     final mm = ((abs % 3600000) ~/ 60000).toString().padLeft(2, '0');
     return t.toIso8601String().replaceFirst('Z', '$sign$hh:$mm');
   }
+
+  /// Inverse of [format]: parses an ISO-8601 string back into the internal
+  /// wall-clock-as-UTC representation. Any trailing offset (or 'Z') is
+  /// ignored, because internally timestamps already carry the file's
+  /// wall-clock time. Returns null if [s] is not a valid ISO-8601 timestamp.
+  static DateTime? parse(String s) {
+    final wallClock = s.trim().replaceFirst(
+      RegExp(r'(Z|[+-]\d{2}:?\d{2})$'),
+      '',
+    );
+    final parsed = DateTime.tryParse('${wallClock}Z') ??
+        DateTime.tryParse('${wallClock}T00:00:00Z');
+    return parsed?.toUtc();
+  }
 }

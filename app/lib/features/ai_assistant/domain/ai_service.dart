@@ -311,6 +311,11 @@ class AiService {
       ..writeln(
         '- Call list_processes first when you are unsure what data is available.',
       )
+      ..writeln(
+        '- When a question matches a known analysis workflow (e.g. the MFC '
+        'garbage-collection cycle), call list_analysis_guides and follow the '
+        'matching guide with get_analysis_guide before improvising.',
+      )
       ..writeln('- Always include units when presenting numeric values.')
       ..writeln(
         '- Be concise and analytical; highlight insights, not raw data dumps.',
@@ -329,6 +334,10 @@ class AiService {
       VsdTools.getStatisticSummary => 'Computing statistics summary',
       VsdTools.compareProcesses => 'Comparing processes',
       VsdTools.findTopStatistics => 'Finding top statistics',
+      VsdTools.findStatEvents => 'Finding statistic events',
+      VsdTools.getValuesAtTime => 'Sampling values at a moment',
+      VsdTools.listAnalysisGuides => 'Listing analysis guides',
+      VsdTools.getAnalysisGuide => 'Reading an analysis guide',
       _ => 'Querying data',
     };
   }

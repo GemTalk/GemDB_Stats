@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vsd_core/vsd_core.dart';
+import 'package:vsd_mcp/src/mcp/guides/analysis_guides.dart';
 import 'package:vsd_mcp/src/mcp/tool_list.dart';
 import 'package:vsd_mcp/src/mcp/tools/analytics_tools.dart';
+import 'package:vsd_mcp/src/mcp/tools/guide_tools.dart';
 import 'package:vsd_mcp/src/mcp/tools/process_tools.dart';
 
 /// Hosts an in-process MCP server exposing VSD analytics tools.
@@ -39,13 +41,17 @@ class VsdMcpServer {
     final server = McpServer(
       Implementation(name: 'vsd-analytics', version: '1.0.0'),
       options: const McpServerOptions(
-        capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
+        capabilities: ServerCapabilities(
+          tools: ServerCapabilitiesTools(),
+          prompts: ServerCapabilitiesPrompts(),
+        ),
       ),
     );
     // The in-app server does not expose file tools: the app owns the
     // DataManager singleton via its UI, so letting the assistant swap the
     // loaded file out from under the GUI would be surprising.
     registerVsdTools(server);
+    registerVsdPrompts(server);
 
     final serverTransport = IOStreamTransport(
       stream: toServer.stream,
@@ -83,6 +89,9 @@ class VsdMcpServer {
 
   /// Lists all tools available on the server.
   Future<ListToolsResult> listTools() => _client.listTools();
+
+  /// Lists all prompts (analysis guides) available on the server.
+  Future<ListPromptsResult> listPrompts() => _client.listPrompts();
 
   /// Calls a tool by [name] with [args] and returns the raw [CallToolResult].
   Future<CallToolResult> callTool(
@@ -193,20 +202,33 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
               'Maximum number of data points to return (default 200). '
               'Increase for anomaly detection.',
         ),
+        'start_time': JsonString(
+          description:
+              'Optional window start (ISO-8601 timestamp as returned by '
+              'other tools). Only points at or after this time are returned.',
+        ),
+        'end_time': JsonString(
+          description:
+              'Optional window end (ISO-8601). Only points at or before '
+              'this time are returned. Windowing avoids downsampling when '
+              'zooming into one event.',
+        ),
       },
       required: ['process_name', 'stat_type_id', 'stat_name'],
     ),
     callback: (args, extra) async {
-      return CallToolResult.fromStructuredContent(
-        executeGetStatisticValues(
+      return _withTimeWindow(args, (startTime, endTime) {
+        return executeGetStatisticValues(
           processName: args['process_name'] as String,
           statTypeId: args['stat_type_id'] as int,
           statName: args['stat_name'] as String,
           processId: args['process_id'] as int?,
           sessionId: args['session_id'] as int?,
           maxPoints: args['max_points'] as int? ?? 200,
-        ),
-      );
+          startTime: startTime,
+          endTime: endTime,
+        );
+      });
     },
   );
 
@@ -222,19 +244,27 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
         'stat_name': JsonString(description: 'The statistic name.'),
         'process_id': JsonInteger(description: 'Optional process ID.'),
         'session_id': JsonInteger(description: 'Optional session ID.'),
+        'start_time': JsonString(
+          description: 'Optional window start (ISO-8601); summarize only samples at or after this time.',
+        ),
+        'end_time': JsonString(
+          description: 'Optional window end (ISO-8601); summarize only samples at or before this time.',
+        ),
       },
       required: ['process_name', 'stat_type_id', 'stat_name'],
     ),
     callback: (args, extra) async {
-      return CallToolResult.fromStructuredContent(
-        executeGetStatisticSummary(
+      return _withTimeWindow(args, (startTime, endTime) {
+        return executeGetStatisticSummary(
           processName: args['process_name'] as String,
           statTypeId: args['stat_type_id'] as int,
           statName: args['stat_name'] as String,
           processId: args['process_id'] as int?,
           sessionId: args['session_id'] as int?,
-        ),
-      );
+          startTime: startTime,
+          endTime: endTime,
+        );
+      });
     },
   );
 
@@ -332,6 +362,134 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
     },
   );
 
+  s.registerTool(
+    VsdTools.findStatEvents,
+    description:
+        'Find when a statistic was active: exact activity intervals with '
+        'start/end/duration and peak value, computed over the full-resolution '
+        'series (no downsampling). Use mode "nonzero" for stats that sit at '
+        'zero between events (e.g. ProgressCount), or "change" for counters '
+        'and levels that plateau between events (e.g. ReclaimCount, '
+        'FreePages). Answers questions like "when did it finish" and "how '
+        'long did it take".',
+    inputSchema: JsonObject(
+      properties: {
+        'process_name': JsonString(description: 'The process name.'),
+        'stat_type_id': JsonInteger(description: 'The stat type ID.'),
+        'stat_name': JsonString(description: 'The statistic name.'),
+        'process_id': JsonInteger(description: 'Optional process ID.'),
+        'session_id': JsonInteger(description: 'Optional session ID.'),
+        'mode': JsonString(
+          description:
+              '"nonzero" (default): active while value > threshold. '
+              '"change": active while the value differs from the previous sample.',
+        ),
+        'threshold': JsonNumber(
+          description: 'Activity threshold for mode "nonzero" (default 0).',
+        ),
+        'start_time': JsonString(description: 'Optional window start (ISO-8601).'),
+        'end_time': JsonString(description: 'Optional window end (ISO-8601).'),
+        'max_intervals': JsonInteger(
+          description: 'Maximum intervals to return (default 50).',
+        ),
+      },
+      required: ['process_name', 'stat_type_id', 'stat_name'],
+    ),
+    callback: (args, extra) async {
+      return _withTimeWindow(args, (startTime, endTime) {
+        return executeFindStatEvents(
+          processName: args['process_name'] as String,
+          statTypeId: args['stat_type_id'] as int,
+          statName: args['stat_name'] as String,
+          processId: args['process_id'] as int?,
+          sessionId: args['session_id'] as int?,
+          mode: args['mode'] as String? ?? 'nonzero',
+          threshold: args['threshold'] as num? ?? 0,
+          startTime: startTime,
+          endTime: endTime,
+          maxIntervals: args['max_intervals'] as int? ?? 50,
+        );
+      });
+    },
+  );
+
+  s.registerTool(
+    VsdTools.getValuesAtTime,
+    description:
+        'Sample one or more statistics of a process at a specific moment, '
+        'returning the value at or before the given time plus the next '
+        'sample. Answers "what was X when Y happened" without pulling whole '
+        'series.',
+    inputSchema: JsonObject(
+      properties: {
+        'process_name': JsonString(description: 'The process name.'),
+        'stat_type_id': JsonInteger(description: 'The stat type ID.'),
+        'stat_names': JsonArray(
+          items: JsonString(),
+          description: 'Statistic names to sample.',
+        ),
+        'time': JsonString(
+          description: 'The moment to sample (ISO-8601 timestamp as returned by other tools).',
+        ),
+        'process_id': JsonInteger(description: 'Optional process ID.'),
+        'session_id': JsonInteger(description: 'Optional session ID.'),
+      },
+      required: ['process_name', 'stat_type_id', 'stat_names', 'time'],
+    ),
+    callback: (args, extra) async {
+      final time = FileTime.parse(args['time'] as String);
+      if (time == null) {
+        return CallToolResult.fromStructuredContent({
+          'error': 'Could not parse time "${args['time']}"; pass an ISO-8601 timestamp.',
+        });
+      }
+      final rawNames = args['stat_names'] as List<dynamic>;
+      return CallToolResult.fromStructuredContent(
+        executeGetValuesAtTime(
+          processName: args['process_name'] as String,
+          statTypeId: args['stat_type_id'] as int,
+          statNames: rawNames.cast<String>(),
+          time: time,
+          processId: args['process_id'] as int?,
+          sessionId: args['session_id'] as int?,
+        ),
+      );
+    },
+  );
+
+  s.registerTool(
+    VsdTools.listAnalysisGuides,
+    description:
+        'List the available analysis guides: expert step-by-step runbooks '
+        'for answering common GemStone performance questions (e.g. '
+        'reconstructing an MFC garbage-collection cycle). When a user '
+        'question matches a guide, fetch it with get_analysis_guide and '
+        'follow its steps using the query tools.',
+    inputSchema: JsonObject(),
+    callback: (args, extra) async {
+      return CallToolResult.fromStructuredContent(executeListAnalysisGuides());
+    },
+  );
+
+  s.registerTool(
+    VsdTools.getAnalysisGuide,
+    description:
+        'Get the full content of an analysis guide by name (from '
+        'list_analysis_guides). Follow the guide step by step with the '
+        'query tools, and note any step whose data is missing or ambiguous.',
+    inputSchema: JsonObject(
+      properties: {
+        'name': JsonString(description: 'The guide name, e.g. "mfc_cycle".'),
+      },
+      required: ['name'],
+    ),
+    callback: (args, extra) async {
+      return CallToolResult.fromStructuredContent(
+        executeGetAnalysisGuide(args['name'] as String),
+      );
+    },
+  );
+
   if (includeFileTools) {
     s.registerTool(
       VsdTools.loadFile,
@@ -364,4 +522,56 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
       },
     );
   }
+}
+
+/// Registers each analysis guide as an MCP prompt, so clients with prompt
+/// support (e.g. Claude Code, Claude Desktop) surface them as slash
+/// commands. The prompt body is the guide itself; the same content is
+/// reachable through the get_analysis_guide tool for clients without
+/// prompt support.
+void registerVsdPrompts(McpServer s) {
+  for (final guide in analysisGuides) {
+    s.registerPrompt(
+      guide.name,
+      title: guide.title,
+      description: guide.description,
+      callback: (args, extra) => GetPromptResult(
+        description: guide.description,
+        messages: [
+          PromptMessage(
+            role: PromptMessageRole.user,
+            content: TextContent(
+              text:
+                  'Follow this analysis guide step by step using the VSD '
+                  'query tools, then report the findings.\n\n${guide.content}',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Parses the optional `start_time`/`end_time` arguments in [args] and runs
+/// [body] with them; returns an error result instead if either fails to
+/// parse.
+CallToolResult _withTimeWindow(
+  Map<String, dynamic> args,
+  Map<String, dynamic> Function(DateTime? startTime, DateTime? endTime) body,
+) {
+  DateTime? parsed(String key) {
+    final raw = args[key] as String?;
+    return raw == null ? null : FileTime.parse(raw);
+  }
+
+  for (final key in ['start_time', 'end_time']) {
+    if (args[key] != null && parsed(key) == null) {
+      return CallToolResult.fromStructuredContent({
+        'error': 'Could not parse $key "${args[key]}"; pass an ISO-8601 timestamp.',
+      });
+    }
+  }
+  return CallToolResult.fromStructuredContent(
+    body(parsed('start_time'), parsed('end_time')),
+  );
 }
