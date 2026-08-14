@@ -7,7 +7,6 @@ default:
     - export PUB_CACHE=$CI_PROJECT_DIR/.pub-cache
     - export PATH="$PATH":"$PUB_CACHE/bin"
     - flutter --version
-    - flutter pub get
 
 stages:
   - test
@@ -16,6 +15,7 @@ lint_app:
   stage: test
   script:
     - cd app
+    - flutter pub get
     - dart format --output=none --set-exit-if-changed .
     - dart analyze
 
@@ -23,6 +23,15 @@ lint_core:
   stage: test
   script:
     - cd core
+    - dart pub get
+    - dart format --output=none --set-exit-if-changed .
+    - dart analyze
+
+lint_mcp:
+  stage: test
+  script:
+    - cd mcp
+    - dart pub get
     - dart format --output=none --set-exit-if-changed .
     - dart analyze
 
@@ -30,10 +39,19 @@ test_app:
   stage: test
   script:
   - cd app
+  - flutter pub get
   - flutter test
 
 test_core:
   stage: test
   script:
     - cd core
+    - dart pub get
+    - dart test
+
+test_mcp:
+  stage: test
+  script:
+    - cd mcp
+    - dart pub get
     - dart test
