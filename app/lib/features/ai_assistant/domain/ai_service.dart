@@ -280,7 +280,9 @@ class AiService {
     const maxNames = 50;
     final names = dm.processes.keys.toList();
     final shownNames = names.take(maxNames).join(', ');
-    final nameSuffix = names.length > maxNames ? ', … and ${names.length - maxNames} more (use list_processes with name_filter to search)' : '';
+    final nameSuffix = names.length > maxNames
+        ? ', … and ${names.length - maxNames} more (use list_processes with name_filter to search)'
+        : '';
 
     buf
       ..writeln()

@@ -25,9 +25,5 @@ Map<String, dynamic> executeGetAnalysisGuide(String name) {
           'Available: ${analysisGuides.map((g) => g.name).join(', ')}',
     };
   }
-  return {
-    'name': guide.name,
-    'title': guide.title,
-    'content': guide.content,
-  };
+  return {'name': guide.name, 'title': guide.title, 'content': guide.content};
 }

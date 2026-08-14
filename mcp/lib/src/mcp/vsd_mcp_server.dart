@@ -94,10 +94,8 @@ class VsdMcpServer {
   Future<ListPromptsResult> listPrompts() => _client.listPrompts();
 
   /// Calls a tool by [name] with [args] and returns the raw [CallToolResult].
-  Future<CallToolResult> callTool(
-    String name,
-    Map<String, dynamic> args,
-  ) => _client.callTool(CallToolRequest(name: name, arguments: args));
+  Future<CallToolResult> callTool(String name, Map<String, dynamic> args) =>
+      _client.callTool(CallToolRequest(name: name, arguments: args));
 }
 
 /// Registers the VSD analytics tools on [s], all backed by the [DataManager]
@@ -245,10 +243,12 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
         'process_id': JsonInteger(description: 'Optional process ID.'),
         'session_id': JsonInteger(description: 'Optional session ID.'),
         'start_time': JsonString(
-          description: 'Optional window start (ISO-8601); summarize only samples at or after this time.',
+          description:
+              'Optional window start (ISO-8601); summarize only samples at or after this time.',
         ),
         'end_time': JsonString(
-          description: 'Optional window end (ISO-8601); summarize only samples at or before this time.',
+          description:
+              'Optional window end (ISO-8601); summarize only samples at or before this time.',
         ),
       },
       required: ['process_name', 'stat_type_id', 'stat_name'],
@@ -387,7 +387,9 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
         'threshold': JsonNumber(
           description: 'Activity threshold for mode "nonzero" (default 0).',
         ),
-        'start_time': JsonString(description: 'Optional window start (ISO-8601).'),
+        'start_time': JsonString(
+          description: 'Optional window start (ISO-8601).',
+        ),
         'end_time': JsonString(description: 'Optional window end (ISO-8601).'),
         'max_intervals': JsonInteger(
           description: 'Maximum intervals to return (default 50).',
@@ -429,7 +431,8 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
           description: 'Statistic names to sample.',
         ),
         'time': JsonString(
-          description: 'The moment to sample (ISO-8601 timestamp as returned by other tools).',
+          description:
+              'The moment to sample (ISO-8601 timestamp as returned by other tools).',
         ),
         'process_id': JsonInteger(description: 'Optional process ID.'),
         'session_id': JsonInteger(description: 'Optional session ID.'),
@@ -440,7 +443,8 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
       final time = FileTime.parse(args['time'] as String);
       if (time == null) {
         return CallToolResult.fromStructuredContent({
-          'error': 'Could not parse time "${args['time']}"; pass an ISO-8601 timestamp.',
+          'error':
+              'Could not parse time "${args['time']}"; pass an ISO-8601 timestamp.',
         });
       }
       final rawNames = args['stat_names'] as List<dynamic>;
@@ -567,7 +571,8 @@ CallToolResult _withTimeWindow(
   for (final key in ['start_time', 'end_time']) {
     if (args[key] != null && parsed(key) == null) {
       return CallToolResult.fromStructuredContent({
-        'error': 'Could not parse $key "${args[key]}"; pass an ISO-8601 timestamp.',
+        'error':
+            'Could not parse $key "${args[key]}"; pass an ISO-8601 timestamp.',
       });
     }
   }

@@ -55,7 +55,9 @@ void main() {
 
       final name = ((all['processes'] as List).first as Map)['name'] as String;
       final filtered = executeListProcesses(nameFilter: name.toUpperCase());
-      final filteredNames = (filtered['processes'] as List).map((p) => (p as Map)['name']);
+      final filteredNames = (filtered['processes'] as List).map(
+        (p) => (p as Map)['name'],
+      );
       expect(filteredNames, contains(name));
 
       final none = executeListProcesses(nameFilter: 'no-such-process-xyz');
@@ -316,7 +318,10 @@ void main() {
         'stat_name': p.type.statistics.first.name,
         'start_time': 'yesterday-ish',
       });
-      expect(extractToolResultText(result), contains('Could not parse start_time'));
+      expect(
+        extractToolResultText(result),
+        contains('Could not parse start_time'),
+      );
     });
   });
 }

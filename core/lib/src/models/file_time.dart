@@ -26,7 +26,8 @@ class FileTime {
       RegExp(r'(Z|[+-]\d{2}:?\d{2})$'),
       '',
     );
-    final parsed = DateTime.tryParse('${wallClock}Z') ??
+    final parsed =
+        DateTime.tryParse('${wallClock}Z') ??
         DateTime.tryParse('${wallClock}T00:00:00Z');
     return parsed?.toUtc();
   }

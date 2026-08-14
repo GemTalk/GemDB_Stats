@@ -19,7 +19,8 @@ class DataManager {
   static final DataManager _instance = DataManager._internal();
 
   final Map<int, StatType> statTypes = {}; // Keyed by stat type ID
-  final Map<String, List<Process>> processes = {}; // Keyed by process name, contains list of processes
+  final Map<String, List<Process>> processes =
+      {}; // Keyed by process name, contains list of processes
   final Map<String, Statistic> statistics = {}; // Keyed by statistic name
 
   /// Get all processes flattened into a single list
@@ -28,7 +29,10 @@ class DataManager {
   }
 
   /// Load and parse data from a statmon file (optionally gzip-compressed)
-  Future<void> loadFromFile(String path, {void Function(double)? onProgress}) async {
+  Future<void> loadFromFile(
+    String path, {
+    void Function(double)? onProgress,
+  }) async {
     statTypes.clear();
     processes.clear();
     FileTime.utcOffsetMs = 0;
@@ -40,7 +44,9 @@ class DataManager {
         try {
           args.sendPort.send(0.02);
           final bytes = File(args.path).readAsBytesSync();
-          final content = args.path.endsWith('.gz') ? utf8.decode(gzip.decode(bytes)) : utf8.decode(bytes);
+          final content = args.path.endsWith('.gz')
+              ? utf8.decode(gzip.decode(bytes))
+              : utf8.decode(bytes);
           if (!content.contains('ENDHEADER')) {
             args.sendPort.send('Not a valid statmon file: missing ENDHEADER');
             return;
@@ -65,7 +71,11 @@ class DataManager {
           args.sendPort.send(e.toString());
         }
       },
-      (sendPort: receivePort.sendPort, path: path, statistics: Map.from(statistics)),
+      (
+        sendPort: receivePort.sendPort,
+        path: path,
+        statistics: Map.from(statistics),
+      ),
     );
 
     // Listen for messages from the isolate
@@ -77,7 +87,12 @@ class DataManager {
         throw FormatException(message);
       } else {
         final result =
-            message as ({Map<int, StatType> statTypes, Map<String, List<Process>> processes, int utcOffsetMs});
+            message
+                as ({
+                  Map<int, StatType> statTypes,
+                  Map<String, List<Process>> processes,
+                  int utcOffsetMs,
+                });
         statTypes.addAll(result.statTypes);
         processes.addAll(result.processes);
         FileTime.utcOffsetMs = result.utcOffsetMs;
@@ -100,7 +115,10 @@ class DataManager {
     final docsStartIndex = content.indexOf('array set statDocs {');
     if (docsStartIndex != -1) {
       // Find the matching closing brace by counting braces
-      final startBrace = content.indexOf('{', docsStartIndex + 'array set statDocs'.length);
+      final startBrace = content.indexOf(
+        '{',
+        docsStartIndex + 'array set statDocs'.length,
+      );
       int braceCount = 1;
       int endBrace = startBrace + 1;
 
@@ -132,7 +150,10 @@ class DataManager {
     final defsStartIndex = content.indexOf('array set statDefinitions {');
     if (defsStartIndex != -1) {
       // Find the matching closing brace by counting braces
-      final startBrace = content.indexOf('{', defsStartIndex + 'array set statDefinitions'.length);
+      final startBrace = content.indexOf(
+        '{',
+        defsStartIndex + 'array set statDefinitions'.length,
+      );
       int braceCount = 1;
       int endBrace = startBrace + 1;
 
@@ -155,9 +176,10 @@ class DataManager {
 
       for (final match in defEntries) {
         final name = match.group(1)!.trim();
-        final params = RegExp(
-          r'"[^"]*"|\S+',
-        ).allMatches(match.group(2)!.trim()).map((m) => m.group(0)!.replaceAll('"', '')).toList();
+        final params = RegExp(r'"[^"]*"|\S+')
+            .allMatches(match.group(2)!.trim())
+            .map((m) => m.group(0)!.replaceAll('"', ''))
+            .toList();
 
         if (params.length >= 4) {
           final type = params[0];
@@ -179,17 +201,31 @@ class DataManager {
     }
   }
 
-  static Map<int, StatType> parseStatTypes(String content, Map<String, Statistic> statistics) {
+  static Map<int, StatType> parseStatTypes(
+    String content,
+    Map<String, Statistic> statistics,
+  ) {
     final statTypes = <int, StatType>{};
-    final match = RegExp(r'StatTypes = \[(.*?)\]', dotAll: true).firstMatch(content);
+    final match = RegExp(
+      r'StatTypes = \[(.*?)\]',
+      dotAll: true,
+    ).firstMatch(content);
 
     if (match != null) {
       final types = match.group(1)!.split(',');
       for (final type in types) {
-        final typeMatch = RegExp(r'(\w+)\s*\(\s*(.*?)\s*\)\s*(\d+)', dotAll: true).firstMatch(type.trim());
+        final typeMatch = RegExp(
+          r'(\w+)\s*\(\s*(.*?)\s*\)\s*(\d+)',
+          dotAll: true,
+        ).firstMatch(type.trim());
         if (typeMatch != null) {
           final id = int.parse(typeMatch.group(3)!);
-          final statNames = typeMatch.group(2)!.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+          final statNames = typeMatch
+              .group(2)!
+              .trim()
+              .split(RegExp(r'\s+'))
+              .where((s) => s.isNotEmpty)
+              .toList();
 
           // Look up Statistic objects by name, skipping the first 6 header fields
           // (StatTypeNum, Time, ProcessName, ProcessId, SessionId, CacheSerialNum)
@@ -217,12 +253,20 @@ class DataManager {
   /// Returns null when the header carries no numeric offset (e.g. a named
   /// timezone like "MEST"), in which case the viewer's timezone is used.
   static int? parseUtcOffsetMs(String content) {
-    final header = content.substring(0, content.length < 4096 ? content.length : 4096);
-    final timeLine = RegExp(r'^Time\s*=\s*"(.*)"', multiLine: true).firstMatch(header);
+    final header = content.substring(
+      0,
+      content.length < 4096 ? content.length : 4096,
+    );
+    final timeLine = RegExp(
+      r'^Time\s*=\s*"(.*)"',
+      multiLine: true,
+    ).firstMatch(header);
     if (timeLine == null) {
       return null;
     }
-    final offset = RegExp(r'([+-])(\d{1,2}):?(\d{2})?\s*$').firstMatch(timeLine.group(1)!);
+    final offset = RegExp(
+      r'([+-])(\d{1,2}):?(\d{2})?\s*$',
+    ).firstMatch(timeLine.group(1)!);
     if (offset == null) {
       return null;
     }
@@ -232,7 +276,8 @@ class DataManager {
     return sign * (hours * 60 + minutes) * 60 * 1000;
   }
 
-  static ({Map<String, List<Process>> processes, int utcOffsetMs}) _parseProcesses(
+  static ({Map<String, List<Process>> processes, int utcOffsetMs})
+  _parseProcesses(
     String content,
     Map<int, StatType> statTypes, {
     int? utcOffsetMs,
@@ -258,9 +303,14 @@ class DataManager {
       // UTC wall-clock values, so times display as the server saw them
       // regardless of the viewer's timezone.
       final rawMs = int.parse(parts[1]) * 1000;
-      utcOffsetMs ??= DateTime.fromMillisecondsSinceEpoch(rawMs).timeZoneOffset.inMilliseconds;
+      utcOffsetMs ??= DateTime.fromMillisecondsSinceEpoch(
+        rawMs,
+      ).timeZoneOffset.inMilliseconds;
       final timestampMs = rawMs + utcOffsetMs;
-      final timestamp = DateTime.fromMillisecondsSinceEpoch(timestampMs, isUtc: true);
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(
+        timestampMs,
+        isUtc: true,
+      );
 
       // Initialize list for this process name if it doesn't exist
       if (!processes.containsKey(processName)) {
@@ -294,7 +344,11 @@ class DataManager {
         existingProcess.samples += 1;
 
         // Add new data points to existing process
-        for (int statIdx = 0; statIdx < existingProcess.type.statistics.length; statIdx++) {
+        for (
+          int statIdx = 0;
+          statIdx < existingProcess.type.statistics.length;
+          statIdx++
+        ) {
           final stat = existingProcess.type.statistics[statIdx];
 
           existingProcess.statisticData[stat.name]!.add(
@@ -315,11 +369,18 @@ class DataManager {
         );
 
         // Initialize TimeSeries for each statistic in the StatType
-        for (int statIdx = 0; statIdx < newProcess.type.statistics.length; statIdx++) {
+        for (
+          int statIdx = 0;
+          statIdx < newProcess.type.statistics.length;
+          statIdx++
+        ) {
           final stat = newProcess.type.statistics[statIdx];
 
           newProcess.statisticData[stat.name] = TimeSeries(statistic: stat)
-            ..add(timestampMs, _parseStatValue(parts[statIdx + 6], stat.type).toDouble());
+            ..add(
+              timestampMs,
+              _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
+            );
         }
 
         processes[processName]!.add(newProcess);
@@ -353,7 +414,11 @@ class DataManager {
   }
 }
 
-typedef _ParseArgs = ({SendPort sendPort, String path, Map<String, Statistic> statistics});
+typedef _ParseArgs = ({
+  SendPort sendPort,
+  String path,
+  Map<String, Statistic> statistics,
+});
 
 /// Parses a raw string value from the data file into the correct [num] type.
 ///

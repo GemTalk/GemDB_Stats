@@ -39,13 +39,19 @@ class TimeSeries {
   bool get hasData => _values.any((v) => v != 0);
   num? get min => _values.isEmpty ? null : _asNum(_values.reduce(math.min));
   num? get max => _values.isEmpty ? null : _asNum(_values.reduce(math.max));
-  double? get average => _values.isEmpty ? null : _values.reduce((a, b) => a + b) / _values.length;
+  double? get average =>
+      _values.isEmpty ? null : _values.reduce((a, b) => a + b) / _values.length;
   double get stddev {
     if (_values.length <= 1) {
       return 0.0;
     }
     final mean = average!;
-    final variance = _values.fold<double>(0.0, (sum, v) => sum + math.pow(v - mean, 2).toDouble()) / _values.length;
+    final variance =
+        _values.fold<double>(
+          0.0,
+          (sum, v) => sum + math.pow(v - mean, 2).toDouble(),
+        ) /
+        _values.length;
     return math.sqrt(variance);
   }
 }
@@ -60,13 +66,18 @@ class _PointsView extends ListBase<DataPoint> {
 
   @override
   DataPoint operator [](int index) => DataPoint(
-    timestamp: DateTime.fromMillisecondsSinceEpoch(_series._timestampsMs[index], isUtc: true),
+    timestamp: DateTime.fromMillisecondsSinceEpoch(
+      _series._timestampsMs[index],
+      isUtc: true,
+    ),
     value: _series._asNum(_series._values[index]),
   );
 
   @override
-  set length(int newLength) => throw UnsupportedError('TimeSeries.points is read-only');
+  set length(int newLength) =>
+      throw UnsupportedError('TimeSeries.points is read-only');
 
   @override
-  void operator []=(int index, DataPoint value) => throw UnsupportedError('TimeSeries.points is read-only');
+  void operator []=(int index, DataPoint value) =>
+      throw UnsupportedError('TimeSeries.points is read-only');
 }

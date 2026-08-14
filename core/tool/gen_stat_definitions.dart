@@ -17,7 +17,9 @@ void main() {
   const chunk = 100;
   final lines = <String>[];
   for (var i = 0; i < b64.length; i += chunk) {
-    lines.add(b64.substring(i, i + chunk > b64.length ? b64.length : i + chunk));
+    lines.add(
+      b64.substring(i, i + chunk > b64.length ? b64.length : i + chunk),
+    );
   }
   final body = lines.map((l) => "    '$l'").join('\n');
 

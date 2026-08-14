@@ -28,7 +28,8 @@ Map<String, dynamic> executeGetStatisticValues({
   final ts = process.statisticData[statName];
   if (ts == null || !ts.hasData) {
     return {
-      'error': 'Statistic "$statName" not found or has no data for process $processName',
+      'error':
+          'Statistic "$statName" not found or has no data for process $processName',
     };
   }
 
@@ -64,7 +65,9 @@ Map<String, dynamic> executeGetStatisticValues({
     'downsampled': downsampled,
     'original_count': originalCount,
     'point_count': displayPoints.length,
-    'points': displayPoints.map((p) => {'t': FileTime.format(p.timestamp), 'v': p.value}).toList(),
+    'points': displayPoints
+        .map((p) => {'t': FileTime.format(p.timestamp), 'v': p.value})
+        .toList(),
   };
 }
 
@@ -291,7 +294,8 @@ Map<String, dynamic> executeFindStatEvents({
   final ts = process.statisticData[statName];
   if (ts == null || !ts.hasData) {
     return {
-      'error': 'Statistic "$statName" not found or has no data for process $processName',
+      'error':
+          'Statistic "$statName" not found or has no data for process $processName',
     };
   }
 
@@ -316,11 +320,13 @@ Map<String, dynamic> executeFindStatEvents({
     intervals.add({
       'start': FileTime.format(first.timestamp),
       'end': FileTime.format(last.timestamp),
-      'duration_seconds': last.timestamp.difference(first.timestamp).inMilliseconds / 1000,
+      'duration_seconds':
+          last.timestamp.difference(first.timestamp).inMilliseconds / 1000,
       'sample_count': lastActiveIndex - start + 1,
       'max_value': runMax,
       'max_value_time': FileTime.format(runMaxTime!),
-      if (mode == 'change') 'value_before': start > 0 ? points[start - 1].value : first.value,
+      if (mode == 'change')
+        'value_before': start > 0 ? points[start - 1].value : first.value,
       if (mode == 'change') 'value_after': last.value,
       // The stat was still active at the last sample of the (windowed)
       // series, so the real end may lie beyond the available data.
@@ -331,7 +337,9 @@ Map<String, dynamic> executeFindStatEvents({
 
   for (var i = 0; i < points.length; i++) {
     final p = points[i];
-    final active = mode == 'change' ? i > 0 && p.value != points[i - 1].value : p.value > threshold;
+    final active = mode == 'change'
+        ? i > 0 && p.value != points[i - 1].value
+        : p.value > threshold;
     if (active) {
       if (runStart == null) {
         runStart = i;
@@ -350,7 +358,9 @@ Map<String, dynamic> executeFindStatEvents({
   }
 
   final total = intervals.length;
-  final capped = total > maxIntervals ? intervals.sublist(0, maxIntervals) : intervals;
+  final capped = total > maxIntervals
+      ? intervals.sublist(0, maxIntervals)
+      : intervals;
   return {
     'stat_name': statName,
     'units': ts.statistic.units,
@@ -393,7 +403,10 @@ Map<String, dynamic> executeGetValuesAtTime({
   for (final statName in statNames) {
     final ts = process.statisticData[statName];
     if (ts == null || ts.points.isEmpty) {
-      values.add({'stat_name': statName, 'error': 'Statistic not found or has no data'});
+      values.add({
+        'stat_name': statName,
+        'error': 'Statistic not found or has no data',
+      });
       continue;
     }
     final points = ts.points;
@@ -429,7 +442,11 @@ Map<String, dynamic> executeGetValuesAtTime({
 }
 
 /// Points of [ts] restricted to the inclusive [startTime]/[endTime] window.
-List<DataPoint> _windowedPoints(TimeSeries ts, DateTime? startTime, DateTime? endTime) {
+List<DataPoint> _windowedPoints(
+  TimeSeries ts,
+  DateTime? startTime,
+  DateTime? endTime,
+) {
   final points = ts.points;
   if (startTime == null && endTime == null) {
     return points;

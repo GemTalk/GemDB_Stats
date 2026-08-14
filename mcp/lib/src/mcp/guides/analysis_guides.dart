@@ -46,8 +46,7 @@ AnalysisGuide? findAnalysisGuide(String name) {
 const _mfcCycleGuide = AnalysisGuide(
   name: 'mfc_cycle',
   title: 'MFC (Mark For Collection) cycle analysis',
-  description:
-      'How to analyze a GemStone MFC garbage-collection cycle.',
+  description: 'How to analyze a GemStone MFC garbage-collection cycle.',
   content: '''
 # MFC (Mark For Collection) cycle analysis
 

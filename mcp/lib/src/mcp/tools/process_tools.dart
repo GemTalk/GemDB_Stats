@@ -7,7 +7,10 @@ import 'package:vsd_core/vsd_core.dart';
 /// hold thousands of process instances, far more than fits in an LLM
 /// context — and the result always carries the total match count so the
 /// caller knows when to narrow the filter.
-Map<String, dynamic> executeListProcesses({String? nameFilter, int limit = 100}) {
+Map<String, dynamic> executeListProcesses({
+  String? nameFilter,
+  int limit = 100,
+}) {
   final dm = DataManager();
   if (dm.allProcesses.isEmpty) {
     return {
@@ -19,7 +22,9 @@ Map<String, dynamic> executeListProcesses({String? nameFilter, int limit = 100})
   var matches = dm.allProcesses;
   final needle = nameFilter?.trim().toLowerCase() ?? '';
   if (needle.isNotEmpty) {
-    matches = matches.where((p) => p.name.toLowerCase().contains(needle)).toList();
+    matches = matches
+        .where((p) => p.name.toLowerCase().contains(needle))
+        .toList();
   }
 
   final cap = limit < 1 ? 100 : limit;
@@ -87,7 +92,9 @@ Map<String, dynamic> executeGetDatasetOverview() {
     return {'message': 'No data loaded. Open a statmon file first.'};
   }
 
-  final allTimes = dm.allProcesses.expand((p) => [p.startTime, p.endTime]).toList();
+  final allTimes = dm.allProcesses
+      .expand((p) => [p.startTime, p.endTime])
+      .toList();
   final minTime = allTimes.reduce((a, b) => a.isBefore(b) ? a : b);
   final maxTime = allTimes.reduce((a, b) => a.isAfter(b) ? a : b);
   final duration = maxTime.difference(minTime);
