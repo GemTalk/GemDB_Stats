@@ -12,13 +12,28 @@ default:
 stages:
   - test
 
-lint:
+lint_app:
   stage: test
   script:
+    - cd app
     - dart format --output=none --set-exit-if-changed .
     - dart analyze
 
-test:
+lint_core:
   stage: test
   script:
-    - flutter test
+    - cd core
+    - dart format --output=none --set-exit-if-changed .
+    - dart analyze
+
+test_app:
+  stage: test
+  script:
+  - cd app
+  - flutter test
+
+test_core:
+  stage: test
+  script:
+    - cd core
+    - dart test
