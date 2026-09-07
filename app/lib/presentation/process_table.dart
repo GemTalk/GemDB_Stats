@@ -327,6 +327,8 @@ class _ProcessTableState extends State<ProcessTable> {
     );
   }
 
+  /// The identity of the process a row stands for, in the same form as
+  /// [Process.identityKey] so the two can be compared directly.
   String _rowSelectionKey(PlutoRow row) {
     final processId = row.cells['processId']!.value as String;
     final sessionId = row.cells['sessionId']!.value as String;

@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:vsd/presentation/chart/trackball_tooltip.dart';
 
 const double kChartPlotTop = 16.0;
-const double kChartTooltipWidth = 170.0;
+const double kChartTooltipWidth = 280.0;
 
 /// Pointer travel (logical px) before a pan is treated as a zoom drag rather
 /// than a click, so accidental clicks don't trigger a zoom.

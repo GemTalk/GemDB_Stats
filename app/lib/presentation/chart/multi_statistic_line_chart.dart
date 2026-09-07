@@ -7,53 +7,47 @@ import 'package:intl/intl.dart';
 import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd/presentation/chart/chart_crosshair.dart';
 import 'package:vsd/presentation/chart/chart_utils.dart';
+import 'package:vsd/presentation/chart/multi_chart_controller.dart';
 import 'package:vsd/presentation/chart/selection_box_painter.dart';
 import 'package:vsd_core/vsd_core.dart';
 
-// Matches Cristalyse's default ChartTheme.defaultTheme() colorPalette order.
-const List<Color> kMultiChartPalette = [
-  Colors.blue,
-  Colors.red,
-  Colors.green,
-  Colors.orange,
-  Colors.purple,
-  Colors.brown,
-  Colors.pink,
-  Colors.grey,
-  Colors.cyan,
-  Colors.lime,
+/// One line chart series
+typedef ChartSeries = ({String name, Color color, List<DataPoint> points});
+
+/// One row of the hover tooltip.
+typedef HoverEntry = ({int seriesIndex, String name, num value, Color color});
+
+List<({String name, num value, Color color})> _tooltipEntries(List<HoverEntry> entries) => [
+  for (final e in entries) (name: e.name, value: e.value, color: e.color),
 ];
 
-// Default theme with colorPalette[1] changed to the axis color so the Y2 axis
-// label is rendered black (Cristalyse hardcodes Y2 label = colorPalette[1]).
-const ChartTheme _kDualAxisTheme = ChartTheme(
+/// Base theme shared by both chart paths. The color palette is supplied per
+/// path, since the dual-axis one has to reserve a slot (see below).
+ChartTheme _themeWithPalette(List<Color> palette) => ChartTheme(
   backgroundColor: Colors.white,
   plotBackgroundColor: Colors.white,
   primaryColor: Colors.blue,
   borderColor: Colors.grey,
-  gridColor: Color(0xFFE0E0E0),
+  gridColor: const Color(0xFFE0E0E0),
   axisColor: Colors.black87,
   gridWidth: 0.5,
   axisWidth: 1.0,
   pointSizeDefault: 4.0,
   pointSizeMin: 2.0,
   pointSizeMax: 12.0,
-  colorPalette: [
-    Colors.blue,
-    Colors.black87,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.brown,
-    Colors.pink,
-    Colors.grey,
-    Colors.cyan,
-    Colors.lime,
-  ],
-  padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: 8),
-  axisTextStyle: TextStyle(fontSize: 12, color: Colors.black87),
-  axisLabelStyle: TextStyle(fontSize: 12, color: Colors.black87),
+  colorPalette: palette,
+  padding: const EdgeInsets.only(left: 8, right: 8, top: 16, bottom: 8),
+  axisTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+  axisLabelStyle: const TextStyle(fontSize: 12, color: Colors.black87),
 );
+
+final ChartTheme _kSingleAxisTheme = _themeWithPalette(kMultiChartPalette);
+
+final ChartTheme _kDualAxisTheme = _themeWithPalette([
+  kMultiChartPalette.first,
+  Colors.black87,
+  ...kMultiChartPalette.skip(1),
+]);
 
 class MultiStatisticLineChart extends StatefulWidget {
   const MultiStatisticLineChart({
@@ -62,8 +56,8 @@ class MultiStatisticLineChart extends StatefulWidget {
     super.key,
   });
 
-  final List<({String name, List<DataPoint> points})> primarySeries;
-  final List<({String name, List<DataPoint> points})> secondarySeries;
+  final List<ChartSeries> primarySeries;
+  final List<ChartSeries> secondarySeries;
 
   @override
   State<MultiStatisticLineChart> createState() => _MultiStatisticLineChartState();
@@ -104,8 +98,8 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   }
 
   bool _seriesChanged(
-    List<({String name, List<DataPoint> points})> a,
-    List<({String name, List<DataPoint> points})> b,
+    List<ChartSeries> a,
+    List<ChartSeries> b,
   ) {
     if (a.length != b.length) {
       return true;
@@ -122,7 +116,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   // in [allValid] order, for the O(log n) hover lookup. Built once per real
   // build (data/zoom change), never on a pointer move.
   List<List<double>> _timestampsBySeries(
-    List<({String name, List<DataPoint> points})> allValid,
+    List<ChartSeries> allValid,
   ) {
     return [
       for (final s in allValid) [for (final p in s.points) p.timestamp.millisecondsSinceEpoch.toDouble()],
@@ -133,9 +127,9 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   // across all series to [dataX]) and the per-series tooltip entries at that x.
   // Returns null when the visible window contains no points. [xsBySeries] aligns
   // index-for-index with [allValid].
-  ({double snappedDataX, List<({String name, num value, Color color})> entries})? _resolveHover(
+  ({double snappedDataX, List<HoverEntry> entries})? _resolveHover(
     double dataX,
-    List<({String name, List<DataPoint> points})> allValid,
+    List<ChartSeries> allValid,
     List<List<double>> xsBySeries,
     double minX,
     double maxX,
@@ -157,14 +151,15 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     if (snappedDataX == null) {
       return null;
     }
-    final entries = <({String name, num value, Color color})>[];
+    final entries = <HoverEntry>[];
     for (var i = 0; i < allValid.length; i++) {
       final idx = nearestInWindowIndex(xsBySeries[i], snappedDataX, minX, maxX);
       if (idx != null) {
         entries.add((
+          seriesIndex: i,
           name: allValid[i].name,
           value: allValid[i].points[idx].value,
-          color: kMultiChartPalette[i % kMultiChartPalette.length],
+          color: allValid[i].color,
         ));
       }
     }
@@ -176,7 +171,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   }
 
   ({num displayMin, num displayMax, List<double> ticks}) _yBounds(
-    List<({String name, List<DataPoint> points})> series,
+    List<ChartSeries> series,
   ) {
     final allY = series.expand((s) => s.points).map((p) => p.value).toList();
     final minY = allY.reduce((a, b) => a < b ? a : b);
@@ -195,7 +190,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     required double maxX,
     required double minY,
     required double maxY,
-    required List<({String name, List<DataPoint> points})> windowSeries,
+    required List<ChartSeries> windowSeries,
     double? minY2,
     double? maxY2,
   }) {
@@ -237,7 +232,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     required double maxX,
     required double minY,
     required double maxY,
-    required List<({String name, List<DataPoint> points})> windowSeries,
+    required List<ChartSeries> windowSeries,
     double? minY2,
     double? maxY2,
   }) {
@@ -332,7 +327,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   }
 
   Widget _buildSingleAxisChart(
-    List<({String name, List<DataPoint> points})> validSeries,
+    List<ChartSeries> validSeries,
     DateFormat timeFormatter,
   ) {
     final allData = validSeries
@@ -382,6 +377,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
           max: displayMaxY,
           tickConfig: TickConfig(ticks: yTicks),
         )
+        .theme(_kSingleAxisTheme)
         .build();
 
     final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true));
@@ -433,7 +429,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
                         ),
                       ),
                       buildPositionedTooltip(
-                        entries: hover.entries,
+                        entries: _tooltipEntries(hover.entries),
                         timestamp: DateTime.fromMillisecondsSinceEpoch(hover.snappedDataX.round(), isUtc: true),
                         crosshairX: crosshairX,
                         size: size,
@@ -466,11 +462,10 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   }
 
   Widget _buildDualAxisChart(
-    List<({String name, List<DataPoint> points})> validPrimary,
-    List<({String name, List<DataPoint> points})> validSecondary,
+    List<ChartSeries> validPrimary,
+    List<ChartSeries> validSecondary,
     DateFormat timeFormatter,
   ) {
-    final primarySeriesNames = validPrimary.map((s) => s.name).toSet();
     final primaryBounds = _yBounds(validPrimary);
     final secondaryBounds = _yBounds(validSecondary);
 
@@ -573,7 +568,6 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
                     child: CustomPaint(
                       painter: _DashedLinesPainter(
                         series: validSecondary,
-                        colorOffset: validPrimary.length,
                         plotArea: plotArea,
                         minX: minX,
                         maxX: maxX,
@@ -605,7 +599,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
                   }
                   final crosshairX = dataXToPixel(hover.snappedDataX, plotArea, minX, maxX);
                   final dots = hover.entries.map((entry) {
-                    final isPrimary = primarySeriesNames.contains(entry.name);
+                    final isPrimary = entry.seriesIndex < validPrimary.length;
                     final bMin = isPrimary ? primMinY : secMinY;
                     final bMax = isPrimary ? primMaxY : secMaxY;
                     final yRange = bMax - bMin;
@@ -626,7 +620,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
                         ),
                       ),
                       buildPositionedTooltip(
-                        entries: hover.entries,
+                        entries: _tooltipEntries(hover.entries),
                         timestamp: DateTime.fromMillisecondsSinceEpoch(hover.snappedDataX.round(), isUtc: true),
                         crosshairX: crosshairX,
                         size: size,
@@ -664,7 +658,6 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
 class _DashedLinesPainter extends CustomPainter {
   const _DashedLinesPainter({
     required this.series,
-    required this.colorOffset,
     required this.plotArea,
     required this.minX,
     required this.maxX,
@@ -672,8 +665,7 @@ class _DashedLinesPainter extends CustomPainter {
     required this.displayMax,
   });
 
-  final List<({String name, List<DataPoint> points})> series;
-  final int colorOffset;
+  final List<ChartSeries> series;
   final Rect plotArea;
   final double minX;
   final double maxX;
@@ -693,10 +685,7 @@ class _DashedLinesPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(plotArea);
 
-    for (int i = 0; i < series.length; i++) {
-      final s = series[i];
-      final color = kMultiChartPalette[(colorOffset + i) % kMultiChartPalette.length];
-
+    for (final s in series) {
       final sorted = List.of(s.points)..sort((a, b) => a.timestamp.compareTo(b.timestamp));
       final pts = sorted.map((p) {
         final sx = plotArea.left + (p.timestamp.millisecondsSinceEpoch.toDouble() - minX) / xRange * plotArea.width;
@@ -704,7 +693,7 @@ class _DashedLinesPainter extends CustomPainter {
         return Offset(sx, sy);
       }).toList();
 
-      _drawDashed(canvas, pts, color);
+      _drawDashed(canvas, pts, s.color);
     }
 
     canvas.restore();
