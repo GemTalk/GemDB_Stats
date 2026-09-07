@@ -22,6 +22,12 @@ class Process {
   int samples;
   final Map<String, TimeSeries> statisticData = {}; // Keyed by statistic name
 
+  /// Stable identity used by [DataManager.findProcess]. Unique within a file.
+  String get identityKey =>
+      '${type.id}|${sessionId ?? ''}|${processId ?? ''}|$name';
+
+  String get displayLabel => processId != null ? '$name $processId' : name;
+
   Map<String, dynamic> toMap() => {
     'name': name,
     'type_name': type.name,

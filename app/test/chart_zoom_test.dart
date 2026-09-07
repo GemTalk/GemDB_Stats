@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vsd/presentation/chart/multi_chart_controller.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
 import 'package:vsd/presentation/chart/statistic_line_chart.dart';
 import 'package:vsd_core/vsd_core.dart';
@@ -72,8 +73,8 @@ void main() {
     await _pumpSized(
       tester,
       MultiStatisticLineChart(
-        primarySeries: [(name: 'A', points: _points())],
-        secondarySeries: [(name: 'B', points: _points())],
+        primarySeries: [(name: 'A', color: kMultiChartPalette[0], points: _points())],
+        secondarySeries: [(name: 'B', color: kMultiChartPalette[1], points: _points())],
       ),
     );
 
