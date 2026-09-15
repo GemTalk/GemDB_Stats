@@ -8,6 +8,16 @@ import 'package:vsd_mcp/src/mcp/tools/analytics_tools.dart';
 import 'package:vsd_mcp/src/mcp/tools/guide_tools.dart';
 import 'package:vsd_mcp/src/mcp/tools/process_tools.dart';
 
+/// How timestamp arguments are interpreted.
+///
+/// Timestamps returned by tools include an explicit offset, so echoing one back
+/// is unambiguous. A bare wall-clock time is read in the zone currently used to
+/// display results.
+const _timeArgHint =
+    'ISO-8601. Include a UTC offset or "Z" (e.g. 2026-02-19T16:09:14-08:00) '
+    'to name an exact instant; omit it and the time is read in the zone '
+    'timestamps are displayed in (see get_dataset_overview.time_range).';
+
 /// Hosts an in-process MCP server exposing VSD analytics tools.
 ///
 /// The server and client communicate over a pair of [StreamController]s.
@@ -174,7 +184,8 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
     VsdTools.getDatasetOverview,
     description:
         'Get a high-level overview of all loaded data: process count, '
-        'names, stat types, time range, and total sample count.',
+        'names, stat types, time range (including the time zone all '
+        'timestamps are displayed in), and total sample count.',
     inputSchema: JsonObject(),
     callback: (args, extra) async {
       return CallToolResult.fromStructuredContent(executeGetDatasetOverview());
@@ -202,14 +213,14 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
         ),
         'start_time': JsonString(
           description:
-              'Optional window start (ISO-8601 timestamp as returned by '
-              'other tools). Only points at or after this time are returned.',
+              'Optional window start. Only points at or after this time are '
+              'returned. $_timeArgHint',
         ),
         'end_time': JsonString(
           description:
-              'Optional window end (ISO-8601). Only points at or before '
-              'this time are returned. Windowing avoids downsampling when '
-              'zooming into one event.',
+              'Optional window end. Only points at or before this time are '
+              'returned. Windowing avoids downsampling when zooming into one '
+              'event. $_timeArgHint',
         ),
       },
       required: ['process_name', 'stat_type_id', 'stat_name'],
@@ -244,11 +255,13 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
         'session_id': JsonInteger(description: 'Optional session ID.'),
         'start_time': JsonString(
           description:
-              'Optional window start (ISO-8601); summarize only samples at or after this time.',
+              'Optional window start; summarize only samples at or after '
+              'this time. $_timeArgHint',
         ),
         'end_time': JsonString(
           description:
-              'Optional window end (ISO-8601); summarize only samples at or before this time.',
+              'Optional window end; summarize only samples at or before '
+              'this time. $_timeArgHint',
         ),
       },
       required: ['process_name', 'stat_type_id', 'stat_name'],
@@ -388,9 +401,11 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
           description: 'Activity threshold for mode "nonzero" (default 0).',
         ),
         'start_time': JsonString(
-          description: 'Optional window start (ISO-8601).',
+          description: 'Optional window start. $_timeArgHint',
         ),
-        'end_time': JsonString(description: 'Optional window end (ISO-8601).'),
+        'end_time': JsonString(
+          description: 'Optional window end. $_timeArgHint',
+        ),
         'max_intervals': JsonInteger(
           description: 'Maximum intervals to return (default 50).',
         ),
@@ -430,21 +445,17 @@ void registerVsdTools(McpServer s, {bool includeFileTools = false}) {
           items: JsonString(),
           description: 'Statistic names to sample.',
         ),
-        'time': JsonString(
-          description:
-              'The moment to sample (ISO-8601 timestamp as returned by other tools).',
-        ),
+        'time': JsonString(description: 'The moment to sample. $_timeArgHint'),
         'process_id': JsonInteger(description: 'Optional process ID.'),
         'session_id': JsonInteger(description: 'Optional session ID.'),
       },
       required: ['process_name', 'stat_type_id', 'stat_names', 'time'],
     ),
     callback: (args, extra) async {
-      final time = FileTime.parse(args['time'] as String);
+      final time = DisplayTime.parse(args['time'] as String);
       if (time == null) {
         return CallToolResult.fromStructuredContent({
-          'error':
-              'Could not parse time "${args['time']}"; pass an ISO-8601 timestamp.',
+          'error': 'Could not parse time "${args['time']}". $_timeArgHint',
         });
       }
       final rawNames = args['stat_names'] as List<dynamic>;
@@ -565,14 +576,13 @@ CallToolResult _withTimeWindow(
 ) {
   DateTime? parsed(String key) {
     final raw = args[key] as String?;
-    return raw == null ? null : FileTime.parse(raw);
+    return raw == null ? null : DisplayTime.parse(raw);
   }
 
   for (final key in ['start_time', 'end_time']) {
     if (args[key] != null && parsed(key) == null) {
       return CallToolResult.fromStructuredContent({
-        'error':
-            'Could not parse $key "${args[key]}"; pass an ISO-8601 timestamp.',
+        'error': 'Could not parse $key "${args[key]}". $_timeArgHint',
       });
     }
   }

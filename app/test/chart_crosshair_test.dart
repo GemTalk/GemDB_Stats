@@ -43,6 +43,9 @@ Future<void> _hoverCenter(WidgetTester tester, Finder chart) async {
 }
 
 void main() {
+  setUp(() => DisplayTime.zone = const DisplayZone.utc());
+  tearDown(() => DisplayTime.zone = const DisplayZone.file());
+
   group('dataXToPixel', () {
     const plot = Rect.fromLTWH(50, 10, 500, 300);
 

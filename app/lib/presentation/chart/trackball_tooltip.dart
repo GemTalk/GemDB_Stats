@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:vsd/presentation/chart/chart_utils.dart';
+import 'package:vsd_core/vsd_core.dart';
 
 class TrackballTooltip extends StatelessWidget {
   const TrackballTooltip({
@@ -9,6 +10,7 @@ class TrackballTooltip extends StatelessWidget {
     super.key,
   });
 
+  /// The true instant hovered; rendered in the current display zone.
   final DateTime timestamp;
   final List<({String name, num value, Color color})> entries;
 
@@ -17,7 +19,10 @@ class TrackballTooltip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeLabel = DateFormat('MMM d yyyy HH:mm:ss').format(timestamp);
+    // The tooltip is where an exact value gets read off, so it names the zone.
+    final timeLabel =
+        '${DateFormat('MMM d yyyy HH:mm:ss').format(DisplayTime.wallClock(timestamp))} '
+        '${DisplayTime.abbreviationAt(timestamp)}';
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: kChartTooltipWidth),
       child: IntrinsicWidth(

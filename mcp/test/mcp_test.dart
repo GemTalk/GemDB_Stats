@@ -126,6 +126,11 @@ void main() {
     );
     final type = StatType(id: 999, name: 'TestType', statistics: [stat]);
 
+    // Pin the display zone: without this these assertions silently inherit
+    // whatever the fixture file in the previous group left behind.
+    setUp(() => DisplayTime.zone = const DisplayZone.utc());
+    tearDown(() => DisplayTime.zone = const DisplayZone.file());
+
     setUpAll(() {
       final ts = TimeSeries(statistic: stat);
       for (var i = 0; i < values.length; i++) {
@@ -196,12 +201,14 @@ void main() {
       );
       expect(result['interval_count'], 2);
       final intervals = (result['intervals'] as List).cast<Map>();
-      expect(intervals[0]['start'], FileTime.format(at(2)));
-      expect(intervals[0]['end'], FileTime.format(at(3)));
+      // Spelled out once, so a formatting regression can't hide behind an
+      // assertion that formats both sides the same way.
+      expect(intervals[0]['start'], '2026-01-01T12:00:02.000+00:00');
+      expect(intervals[0]['end'], DisplayTime.format(at(3)));
       expect(intervals[0]['duration_seconds'], 1.0);
       expect(intervals[0]['max_value'], 5);
-      expect(intervals[0]['max_value_time'], FileTime.format(at(3)));
-      expect(intervals[1]['start'], FileTime.format(at(6)));
+      expect(intervals[0]['max_value_time'], DisplayTime.format(at(3)));
+      expect(intervals[1]['start'], DisplayTime.format(at(6)));
       expect(intervals[1]['max_value'], 2);
       expect(intervals[1].containsKey('truncated'), isFalse);
     });
@@ -217,12 +224,12 @@ void main() {
       expect(result['interval_count'], 2);
       final intervals = (result['intervals'] as List).cast<Map>();
       // Changes at samples 2,3,4 (0→3→5→0) then 6,7 (0→2→0).
-      expect(intervals[0]['start'], FileTime.format(at(2)));
-      expect(intervals[0]['end'], FileTime.format(at(4)));
+      expect(intervals[0]['start'], DisplayTime.format(at(2)));
+      expect(intervals[0]['end'], DisplayTime.format(at(4)));
       expect(intervals[0]['value_before'], 0);
       expect(intervals[0]['value_after'], 0);
-      expect(intervals[1]['start'], FileTime.format(at(6)));
-      expect(intervals[1]['end'], FileTime.format(at(7)));
+      expect(intervals[1]['start'], DisplayTime.format(at(6)));
+      expect(intervals[1]['end'], DisplayTime.format(at(7)));
     });
 
     test('find_stat_events respects threshold and window', () {
@@ -236,8 +243,8 @@ void main() {
       );
       expect(result['interval_count'], 1);
       final intervals = (result['intervals'] as List).cast<Map>();
-      expect(intervals[0]['start'], FileTime.format(at(2)));
-      expect(intervals[0]['end'], FileTime.format(at(3)));
+      expect(intervals[0]['start'], DisplayTime.format(at(2)));
+      expect(intervals[0]['end'], DisplayTime.format(at(3)));
     });
 
     test('get_values_at_time samples at-or-before with the next sample', () {
@@ -250,7 +257,7 @@ void main() {
       );
       final values = (result['values'] as List).cast<Map>();
       expect(values[0]['value'], 5);
-      expect(values[0]['sample_time'], FileTime.format(at(3)));
+      expect(values[0]['sample_time'], DisplayTime.format(at(3)));
       expect((values[0]['next_sample'] as Map)['value'], 0);
       expect(values[1]['error'], contains('not found'));
     });
@@ -265,6 +272,34 @@ void main() {
       );
       final values = (result['values'] as List).cast<Map>();
       expect(values[0]['error'], contains('before the first sample'));
+    });
+
+    test('tool output follows the selected display zone', () {
+      DisplayTime.zone = const DisplayZone.named('Europe/Berlin');
+      final result = executeGetValuesAtTime(
+        processName: 'synthetic-proc',
+        statTypeId: 999,
+        statNames: ['TestStat'],
+        time: at(3).add(const Duration(milliseconds: 500)),
+        processId: 42,
+      );
+      final values = (result['values'] as List).cast<Map>();
+      // Same instant as the UTC test above, rendered as Berlin winter time.
+      expect(values[0]['sample_time'], '2026-01-01T13:00:03.000+01:00');
+    });
+
+    test('offset-bearing input is absolute, offset-less input is zoned', () {
+      DisplayTime.zone = const DisplayZone.named('Europe/Berlin');
+      final result = executeGetStatisticValues(
+        processName: 'synthetic-proc',
+        statTypeId: 999,
+        statName: 'TestStat',
+        processId: 42,
+        startTime: DisplayTime.parse('2026-01-01T12:00:02Z'),
+        endTime: DisplayTime.parse('2026-01-01T13:00:05'),
+      );
+      // The Z start and the bare Berlin end name the same window as at(2)..at(5).
+      expect(result['point_count'], 4);
     });
   });
 

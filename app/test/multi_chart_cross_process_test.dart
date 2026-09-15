@@ -72,6 +72,9 @@ Future<void> _hoverCenter(WidgetTester tester, Finder target) async {
 }
 
 void main() {
+  setUp(() => DisplayTime.zone = const DisplayZone.utc());
+  tearDown(() => DisplayTime.zone = const DisplayZone.file());
+
   // The same statistic name on two processes — the case that used to be
   // unreachable, and the one where a name-keyed lookup would collide.
   late Process stone;

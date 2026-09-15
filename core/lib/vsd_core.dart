@@ -4,7 +4,9 @@
 library;
 
 export 'src/data_manager.dart';
-export 'src/models/file_time.dart';
+export 'src/models/display_time.dart';
+export 'src/models/display_zone.dart';
+export 'src/models/file_zone.dart';
 export 'src/models/process.dart';
 export 'src/models/stat_type.dart';
 export 'src/models/statistic.dart';

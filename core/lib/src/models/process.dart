@@ -1,4 +1,4 @@
-import 'package:vsd_core/src/models/file_time.dart';
+import 'package:vsd_core/src/models/display_time.dart';
 import 'package:vsd_core/src/models/stat_type.dart';
 import 'package:vsd_core/src/models/time_series.dart';
 
@@ -34,8 +34,8 @@ class Process {
     'type_id': type.id,
     'process_id': processId,
     'session_id': sessionId,
-    'start_time': FileTime.format(startTime),
-    'end_time': FileTime.format(endTime),
+    'start_time': DisplayTime.format(startTime),
+    'end_time': DisplayTime.format(endTime),
     'samples': samples,
   };
 }

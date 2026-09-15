@@ -364,10 +364,10 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         .geomLine(strokeWidth: 1.8)
         .animate(duration: Duration.zero)
         .scaleXContinuous(
-          title: 'Timestamp',
-          labels: (value) => timeFormatter.format(
-            DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true),
+          title: xAxisTitle(
+            DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true),
           ),
+          labels: (value) => timeFormatter.format(DisplayTime.wallClockFromMs(value.toInt())),
           min: minX,
           max: maxX,
         )
@@ -380,7 +380,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         .theme(_kSingleAxisTheme)
         .build();
 
-    final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true));
+    final sampleXLabel = timeFormatter.format(DisplayTime.wallClockFromMs(minX.toInt()));
 
     return MouseRegion(
       cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,
@@ -519,10 +519,10 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
         .geomLine(strokeWidth: 1.8, yAxis: YAxis.secondary) // keeps right axis enabled
         .animate(duration: Duration.zero)
         .scaleXContinuous(
-          title: 'Timestamp',
-          labels: (value) => timeFormatter.format(
-            DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true),
+          title: xAxisTitle(
+            DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true),
           ),
+          labels: (value) => timeFormatter.format(DisplayTime.wallClockFromMs(value.toInt())),
           min: minX,
           max: maxX,
         )
@@ -544,7 +544,7 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
     final allValid = [...validPrimary, ...validSecondary];
     // Sorted timestamps per series (ms), cached for the O(log n) hover lookup.
     final xsBySeries = _timestampsBySeries(allValid);
-    final sampleXLabel = timeFormatter.format(DateTime.fromMillisecondsSinceEpoch(minX.toInt(), isUtc: true));
+    final sampleXLabel = timeFormatter.format(DisplayTime.wallClockFromMs(minX.toInt()));
 
     return MouseRegion(
       cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,

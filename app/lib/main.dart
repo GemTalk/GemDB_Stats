@@ -6,6 +6,7 @@ import 'package:vsd_core/vsd_core.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  DisplayTime.ensureTimeZoneData();
   await DataManager().loadStatistics();
   runApp(const MainApp());
 }

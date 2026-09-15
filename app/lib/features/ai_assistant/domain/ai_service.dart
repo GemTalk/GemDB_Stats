@@ -298,10 +298,18 @@ class AiService {
       final minT = allTimes.reduce((a, b) => a.isBefore(b) ? a : b);
       final maxT = allTimes.reduce((a, b) => a.isAfter(b) ? a : b);
       final dur = maxT.difference(minT);
-      buf.writeln(
-        'Time range: ${FileTime.format(minT)} → ${FileTime.format(maxT)} '
-        '(${dur.inMinutes} min)',
-      );
+      buf
+        ..writeln(
+          'Time range: ${DisplayTime.format(minT)} → ${DisplayTime.format(maxT)} '
+          '(${dur.inMinutes} min)',
+        )
+        // The user can switch this from the View menu, so say which clock the
+        // timestamps in tool results are on.
+        ..writeln(
+          'All times are shown in: ${DisplayTime.zoneLabel}. '
+          'Timestamps you receive carry an explicit UTC offset; echo one back '
+          'verbatim to name the same instant.',
+        );
     }
 
     buf

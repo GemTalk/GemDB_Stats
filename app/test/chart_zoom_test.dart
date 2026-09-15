@@ -42,6 +42,13 @@ Future<void> _dragBox(WidgetTester tester) async {
 }
 
 void main() {
+  // Pin the display zone: axis tick text would otherwise depend on the zone
+  // the test machine is set to. (Only the title names the zone — tick labels
+  // stay HH:mm:ss, which is what keeps the hard-coded drag offsets below
+  // valid, since sampleXLabel's width sizes the plot rect.)
+  setUp(() => DisplayTime.zone = const DisplayZone.utc());
+  tearDown(() => DisplayTime.zone = const DisplayZone.file());
+
   testWidgets('StatisticLineChart drag zooms in and reset clears it', (tester) async {
     await _pumpSized(tester, StatisticLineChart(points: _points(), statisticName: 'CpuLoad'));
 

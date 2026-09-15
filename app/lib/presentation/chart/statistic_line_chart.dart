@@ -130,10 +130,8 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
         .geomLine(strokeWidth: 1.8, color: const Color(0xFF0078A8))
         .animate(duration: Duration.zero)
         .scaleXContinuous(
-          title: 'Timestamp',
-          labels: (value) => timeFormatter.format(
-            DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true),
-          ),
+          title: xAxisTitle(widget.points.last.timestamp),
+          labels: (value) => timeFormatter.format(DisplayTime.wallClockFromMs(value.toInt())),
           min: minX,
           max: maxX,
         )
@@ -145,7 +143,9 @@ class _StatisticLineChartState extends State<StatisticLineChart> {
         )
         .build();
 
-    final sampleXLabel = timeFormatter.format(widget.points.last.timestamp);
+    final sampleXLabel = timeFormatter.format(
+      DisplayTime.wallClock(widget.points.last.timestamp),
+    );
 
     return MouseRegion(
       cursor: _dragging ? SystemMouseCursors.precise : SystemMouseCursors.basic,

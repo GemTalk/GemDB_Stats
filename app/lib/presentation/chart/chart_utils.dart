@@ -4,6 +4,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:vsd/presentation/chart/trackball_tooltip.dart';
+import 'package:vsd_core/vsd_core.dart';
+
+/// X-axis title for the tick-label zone.
+/// Kept here so paint-time label widening cannot misalign the plot rectangle.
+String xAxisTitle(DateTime instant) => 'Timestamp (${DisplayTime.abbreviationAt(instant)})';
 
 const double kChartPlotTop = 16.0;
 const double kChartTooltipWidth = 280.0;

@@ -7,10 +7,16 @@ import 'package:vsd/presentation/_reusable_components/search_bar.dart';
 import 'package:vsd_core/vsd_core.dart';
 
 class ProcessTable extends StatefulWidget {
-  const ProcessTable({super.key, this.onProcessSelected, this.showYear = true});
+  const ProcessTable({
+    super.key,
+    this.onProcessSelected,
+    this.showYearAndZone = true,
+    this.displayZone = const DisplayZone.file(),
+  });
 
   final void Function(Process?)? onProcessSelected;
-  final bool showYear;
+  final bool showYearAndZone;
+  final DisplayZone displayZone;
 
   @override
   State<ProcessTable> createState() => _ProcessTableState();
@@ -23,7 +29,7 @@ class _ProcessTableState extends State<ProcessTable> {
   final TextEditingController _searchController = TextEditingController();
   String searchQuery = '';
   late List<PlutoColumn> columns;
-  late final DateFormat _dateFormat;
+  late DateFormat _dateFormat;
   late final List<Process> _allProcesses;
   List<PlutoRow> _rows = const [];
   // Tracks whether the cursor is over a data row, so the click/basic cursor can
@@ -33,10 +39,10 @@ class _ProcessTableState extends State<ProcessTable> {
   @override
   void initState() {
     super.initState();
-    final timeWidth = widget.showYear ? 158.0 : 124.0;
+    final timeWidth = widget.showYearAndZone ? 158.0 : 124.0;
     columns = [
       PlutoColumn(
-        title: 'Start Time',
+        title: _timeColumnTitle('Start Time'),
         field: 'startTime',
         type: PlutoColumnType.text(),
         enableColumnDrag: false,
@@ -44,7 +50,7 @@ class _ProcessTableState extends State<ProcessTable> {
         width: timeWidth,
       ),
       PlutoColumn(
-        title: 'End Time',
+        title: _timeColumnTitle('End Time'),
         field: 'endTime',
         type: PlutoColumnType.text(),
         enableColumnDrag: false,
@@ -91,11 +97,35 @@ class _ProcessTableState extends State<ProcessTable> {
         enableContextMenu: false,
       ),
     ];
-    // Built once: the widget is recreated (via key) when the data set or
-    // showYear changes, so these snapshots stay valid for this State's lifetime.
-    _dateFormat = DateFormat(widget.showYear ? 'yyyy/MM/dd HH:mm:ss' : 'MM/dd HH:mm:ss');
+    // Built once; zone changes are reapplied in didUpdateWidget so the user's
+    // search, selection, and scroll state survive a display-zone switch.
+    _dateFormat = DateFormat(widget.showYearAndZone ? 'yyyy/MM/dd HH:mm:ss' : 'MM/dd HH:mm:ss');
     _allProcesses = DataManager().allProcesses;
     _rows = _buildRows();
+  }
+
+  @override
+  void didUpdateWidget(ProcessTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.displayZone == widget.displayZone) {
+      return;
+    }
+    columns[0].title = _timeColumnTitle('Start Time');
+    columns[1].title = _timeColumnTitle('End Time');
+    _updateGridRows();
+    _stateManager?.notifyListeners();
+  }
+
+  /// Names the zone in the header rather than in every cell, which would
+  /// outgrow the column widths.
+  String _timeColumnTitle(String base) {
+    final processes = DataManager().allProcesses;
+    if (!widget.showYearAndZone || processes.isEmpty) {
+      return base;
+    }
+    // A file spanning a DST change has two abbreviations; the one it starts
+    // in is the honest single answer.
+    return '$base (${DisplayTime.abbreviationAt(processes.first.startTime)})';
   }
 
   @override
@@ -119,8 +149,12 @@ class _ProcessTableState extends State<ProcessTable> {
         .map((process) {
           return PlutoRow(
             cells: {
-              'startTime': PlutoCell(value: _dateFormat.format(process.startTime)),
-              'endTime': PlutoCell(value: _dateFormat.format(process.endTime)),
+              'startTime': PlutoCell(
+                value: _dateFormat.format(DisplayTime.wallClock(process.startTime)),
+              ),
+              'endTime': PlutoCell(
+                value: _dateFormat.format(DisplayTime.wallClock(process.endTime)),
+              ),
               'file': PlutoCell(value: 1),
               'samples': PlutoCell(value: process.samples),
               'processId': PlutoCell(value: (process.processId ?? '').toString()),

@@ -40,8 +40,8 @@ Map<String, dynamic> executeGetStatisticValues({
       'point_count': 0,
       'note':
           'No samples in the requested time window; the process has data '
-          'from ${FileTime.format(process.startTime)} '
-          'to ${FileTime.format(process.endTime)}.',
+          'from ${DisplayTime.format(process.startTime)} '
+          'to ${DisplayTime.format(process.endTime)}.',
     };
   }
   final originalCount = allPoints.length;
@@ -66,7 +66,7 @@ Map<String, dynamic> executeGetStatisticValues({
     'original_count': originalCount,
     'point_count': displayPoints.length,
     'points': displayPoints
-        .map((p) => {'t': FileTime.format(p.timestamp), 'v': p.value})
+        .map((p) => {'t': DisplayTime.format(p.timestamp), 'v': p.value})
         .toList(),
   };
 }
@@ -138,8 +138,8 @@ Map<String, dynamic> executeGetStatisticSummary({
     'stat_name': statName,
     'units': ts.statistic.units,
     'point_count': points.length,
-    'window_start': FileTime.format(points.first.timestamp),
-    'window_end': FileTime.format(points.last.timestamp),
+    'window_start': DisplayTime.format(points.first.timestamp),
+    'window_end': DisplayTime.format(points.last.timestamp),
     'min': minV,
     'max': maxV,
     'avg': avg,
@@ -318,13 +318,13 @@ Map<String, dynamic> executeFindStatEvents({
     final first = points[start];
     final last = points[lastActiveIndex];
     intervals.add({
-      'start': FileTime.format(first.timestamp),
-      'end': FileTime.format(last.timestamp),
+      'start': DisplayTime.format(first.timestamp),
+      'end': DisplayTime.format(last.timestamp),
       'duration_seconds':
           last.timestamp.difference(first.timestamp).inMilliseconds / 1000,
       'sample_count': lastActiveIndex - start + 1,
       'max_value': runMax,
-      'max_value_time': FileTime.format(runMaxTime!),
+      'max_value_time': DisplayTime.format(runMaxTime!),
       if (mode == 'change')
         'value_before': start > 0 ? points[start - 1].value : first.value,
       if (mode == 'change') 'value_after': last.value,
@@ -367,8 +367,8 @@ Map<String, dynamic> executeFindStatEvents({
     'mode': mode,
     if (mode == 'nonzero') 'threshold': threshold,
     'samples_examined': points.length,
-    'series_start': FileTime.format(points.first.timestamp),
-    'series_end': FileTime.format(points.last.timestamp),
+    'series_start': DisplayTime.format(points.first.timestamp),
+    'series_end': DisplayTime.format(points.last.timestamp),
     'interval_count': total,
     if (total > maxIntervals)
       'note':
@@ -416,7 +416,7 @@ Map<String, dynamic> executeGetValuesAtTime({
         'stat_name': statName,
         'error':
             'Requested time is before the first sample '
-            '(${FileTime.format(points.first.timestamp)})',
+            '(${DisplayTime.format(points.first.timestamp)})',
       });
       continue;
     }
@@ -425,18 +425,18 @@ Map<String, dynamic> executeGetValuesAtTime({
       'stat_name': statName,
       'units': ts.statistic.units,
       'value': sample.value,
-      'sample_time': FileTime.format(sample.timestamp),
+      'sample_time': DisplayTime.format(sample.timestamp),
       if (idx + 1 < points.length)
         'next_sample': {
           'value': points[idx + 1].value,
-          'time': FileTime.format(points[idx + 1].timestamp),
+          'time': DisplayTime.format(points[idx + 1].timestamp),
         },
     });
   }
 
   return {
     'process_name': processName,
-    'requested_time': FileTime.format(time),
+    'requested_time': DisplayTime.format(time),
     'values': values,
   };
 }

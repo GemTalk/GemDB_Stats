@@ -43,6 +43,19 @@ void main() {
       );
     });
 
+    test('parseZoneAbbreviation names the zone we could not resolve', () {
+      expect(
+        DataManager.parseZoneAbbreviation('STATMON "3"\nTime = "20/08/11 06:55:32 MEST"\n'),
+        'MEST',
+      );
+      // A numeric offset needs no explaining.
+      expect(
+        DataManager.parseZoneAbbreviation('STATMON "4"\nTime = "2026-02-19T16:09:13.930-08:00"\n'),
+        isNull,
+      );
+      expect(DataManager.parseZoneAbbreviation('STATMON "4"\n'), isNull);
+    });
+
     test('loadFromFile parses a statmon file end-to-end', () async {
       final dm = DataManager();
       dm.statistics.addAll(statisticsMap);
@@ -57,13 +70,20 @@ void main() {
       final process = dm.allProcesses.first;
       expect(process.statisticData, isNotEmpty);
 
-      // Times display in the file's recorded timezone (-08:00 in this file),
-      // not the viewer's: first sample is epoch 1771546154 = 16:09:14 -08:00.
-      expect(process.startTime, DateTime.utc(2026, 2, 19, 16, 9, 14));
+      // Timestamps are stored as true instants: the first sample is epoch
+      // 1771546154, which is 2026-02-20T00:09:14Z.
+      expect(process.startTime, DateTime.utc(2026, 2, 20, 0, 9, 14));
+      expect(process.startTime.millisecondsSinceEpoch, 1771546154000);
 
-      // Exported times carry the file's real UTC offset, not 'Z'
-      expect(FileTime.utcOffsetMs, -8 * 3600000);
-      expect(FileTime.format(process.startTime), '2026-02-19T16:09:14.000-08:00');
+      // By default they display in the file's own zone, so the rendered time
+      // is the server's wall clock and carries its real offset, not 'Z'.
+      expect(DisplayTime.fileZone.offsetMs, -8 * 3600000);
+      expect(DisplayTime.format(process.startTime), '2026-02-19T16:09:14.000-08:00');
+
+      // Switching the display zone re-renders the same instant.
+      DisplayTime.zone = const DisplayZone.utc();
+      addTearDown(() => DisplayTime.zone = const DisplayZone.file());
+      expect(DisplayTime.format(process.startTime), '2026-02-20T00:09:14.000+00:00');
 
       final ts = process.statisticData.values.first;
       expect(ts.points, isNotEmpty);
@@ -71,7 +91,7 @@ void main() {
 
       // The points view should expose real timestamps in order
       final timestamps = ts.points.map((p) => p.timestamp).toList();
-      expect(timestamps.first.millisecondsSinceEpoch, greaterThan(0));
+      expect(timestamps.first.millisecondsSinceEpoch, 1771546154000);
       for (int i = 1; i < timestamps.length; i++) {
         expect(timestamps[i].isBefore(timestamps[i - 1]), isFalse);
       }
@@ -81,6 +101,22 @@ void main() {
       for (final s in intSeries.take(5)) {
         expect(s.points.first.value, isA<int>());
       }
+    });
+
+    test('loading a file updates the file zone but keeps the selection', () async {
+      final dm = DataManager();
+      dm.statistics.addAll(statisticsMap);
+      await dm.loadFromFile('test/test_data/statmon76637.out');
+
+      DisplayTime.zone = const DisplayZone.utc();
+      addTearDown(() => DisplayTime.zone = const DisplayZone.file());
+
+      await dm.loadFromFile('test/test_data/statmon76637.out');
+
+      // Only "File" follows the new file; what the user chose to read in
+      // survives the load.
+      expect(DisplayTime.zone, const DisplayZone.utc());
+      expect(DisplayTime.fileZone.offsetMs, -8 * 3600000);
     });
 
     test('drops out-of-order/duplicate samples so every process is monotonic', () async {

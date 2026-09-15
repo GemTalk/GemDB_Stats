@@ -10,6 +10,7 @@ import 'package:vsd/presentation/chart/statistic_line_chart.dart';
 import 'package:vsd/presentation/file_bar.dart';
 import 'package:vsd/presentation/process_table.dart';
 import 'package:vsd/presentation/statistics_table/statistics_table.dart';
+import 'package:vsd/presentation/time_zone/time_zone_menu.dart';
 import 'package:vsd/theme.dart';
 import 'package:vsd_core/vsd_core.dart';
 
@@ -28,12 +29,28 @@ class _HomePageState extends State<HomePage> {
   String? _loadError;
   int _dataVersion = 0;
   bool _aiPanelOpen = false;
-  bool _showYear = true;
+  bool _showYearAndZone = true;
+  DisplayZone _zone = const DisplayZone.file();
   late MultiSplitViewController _mainController;
   late MultiSplitViewController _chartPaneController;
   bool _legendOpen = false;
 
-  List<PlatformMenu> get platformMenus => [
+  // Menus are rebuilt on every setState, but the platform menu is expensive to
+  // serialize. Cache the built menu and only refresh it when the visible items
+  // actually change.
+  ({bool showYearAndZone, DisplayZone zone, int dataVersion})? _menuCacheKey;
+  List<PlatformMenu>? _menuCache;
+
+  List<PlatformMenu> get platformMenus {
+    final key = (showYearAndZone: _showYearAndZone, zone: _zone, dataVersion: _dataVersion);
+    if (_menuCacheKey != key) {
+      _menuCacheKey = key;
+      _menuCache = _buildPlatformMenus();
+    }
+    return _menuCache!;
+  }
+
+  List<PlatformMenu> _buildPlatformMenus() => [
     PlatformMenu(
       label: 'vsd',
       menus: [
@@ -61,8 +78,16 @@ class _HomePageState extends State<HomePage> {
       label: 'View',
       menus: [
         PlatformMenuItem(
-          label: _showYear ? '✓ Show Year' : 'Show Year',
-          onSelected: () => setState(() => _showYear = !_showYear),
+          label: _showYearAndZone ? '✓ Show Year & Time Zone' : 'Show Year & Time Zone',
+          onSelected: () => setState(() => _showYearAndZone = !_showYearAndZone),
+        ),
+        PlatformMenuItemGroup(
+          members: [
+            PlatformMenu(
+              label: 'Time Zone',
+              menus: buildTimeZoneMenuItems(current: _zone, onSelect: _setZone),
+            ),
+          ],
         ),
       ],
     ),
@@ -120,6 +145,12 @@ class _HomePageState extends State<HomePage> {
       _mainController.addArea(aiPanelArea());
     }
     setState(() => _aiPanelOpen = !_aiPanelOpen);
+  }
+
+  /// Updates the displayed timezone and keeps the app, MCP tools, and AI in sync.
+  void _setZone(DisplayZone zone) {
+    DisplayTime.zone = zone;
+    setState(() => _zone = zone);
   }
 
   Future<void> _handleFileSelected(String path) async {
@@ -255,8 +286,9 @@ class _HomePageState extends State<HomePage> {
   Area processTableArea() {
     return Area(
       builder: (context, area) => ProcessTable(
-        key: ValueKey((_dataVersion, _showYear)),
-        showYear: _showYear,
+        key: ValueKey((_dataVersion, _showYearAndZone)),
+        showYearAndZone: _showYearAndZone,
+        displayZone: _zone,
         onProcessSelected: (process) {
           setState(() {
             selectedProcess = process;

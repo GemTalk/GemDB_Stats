@@ -104,9 +104,10 @@ Map<String, dynamic> executeGetDatasetOverview() {
     'process_names': dm.processes.keys.toList(),
     'stat_type_names': dm.statTypes.values.map((t) => t.name).toSet().toList(),
     'time_range': {
-      'start': FileTime.format(minTime),
-      'end': FileTime.format(maxTime),
+      'start': DisplayTime.format(minTime),
+      'end': DisplayTime.format(maxTime),
       'duration_minutes': duration.inMinutes,
+      'time_zone': DisplayTime.zoneLabel,
     },
     'total_samples': dm.allProcesses.fold<int>(0, (sum, p) => sum + p.samples),
   };

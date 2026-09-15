@@ -3,7 +3,8 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:vsd_core/src/models/file_time.dart';
+import 'package:vsd_core/src/models/display_time.dart';
+import 'package:vsd_core/src/models/file_zone.dart';
 import 'package:vsd_core/src/models/process.dart';
 import 'package:vsd_core/src/models/stat_type.dart';
 import 'package:vsd_core/src/models/statistic.dart';
@@ -35,7 +36,7 @@ class DataManager {
   }) async {
     statTypes.clear();
     processes.clear();
-    FileTime.utcOffsetMs = 0;
+    DisplayTime.fileZone = FileZone.unknown;
 
     // Use an isolate to read, decompress and parse the file without blocking the UI
     final receivePort = ReceivePort();
@@ -57,15 +58,15 @@ class DataManager {
           final parsed = _parseProcesses(
             content,
             parsedStatTypes,
-            utcOffsetMs: parseUtcOffsetMs(content),
             onProgress: (p) => args.sendPort.send(0.1 + 0.9 * p),
           );
           // Isolate.exit transfers ownership of the result without copying it,
           // unlike sendPort.send which deep-copies the whole object graph.
           Isolate.exit(args.sendPort, (
             statTypes: parsedStatTypes,
-            processes: parsed.processes,
-            utcOffsetMs: parsed.utcOffsetMs,
+            processes: parsed,
+            fileUtcOffsetMs: parseUtcOffsetMs(content),
+            fileZoneAbbreviation: parseZoneAbbreviation(content),
           ));
         } catch (e) {
           args.sendPort.send(e.toString());
@@ -91,11 +92,17 @@ class DataManager {
                 as ({
                   Map<int, StatType> statTypes,
                   Map<String, List<Process>> processes,
-                  int utcOffsetMs,
+                  int? fileUtcOffsetMs,
+                  String? fileZoneAbbreviation,
                 });
         statTypes.addAll(result.statTypes);
         processes.addAll(result.processes);
-        FileTime.utcOffsetMs = result.utcOffsetMs;
+        // Only the file's own zone changes here; the user's display-zone
+        // selection deliberately survives a file load.
+        DisplayTime.fileZone = FileZone(
+          offsetMs: result.fileUtcOffsetMs,
+          abbreviation: result.fileZoneAbbreviation,
+        );
         receivePort.close();
         break;
       }
@@ -248,25 +255,29 @@ class DataManager {
     return statTypes;
   }
 
+  static String? _headerTimeField(String content) {
+    final header = content.substring(
+      0,
+      content.length < 4096 ? content.length : 4096,
+    );
+    return RegExp(
+      r'^Time\s*=\s*"(.*)"',
+      multiLine: true,
+    ).firstMatch(header)?.group(1);
+  }
+
   /// Parse the UTC offset recorded in the file header's Time field, e.g.
   /// `Time = "05/21/2026 00:00:02 -03"` or `Time = "2026-02-19T16:09:13.930-08:00"`.
   /// Returns null when the header carries no numeric offset (e.g. a named
   /// timezone like "MEST"), in which case the viewer's timezone is used.
   static int? parseUtcOffsetMs(String content) {
-    final header = content.substring(
-      0,
-      content.length < 4096 ? content.length : 4096,
-    );
-    final timeLine = RegExp(
-      r'^Time\s*=\s*"(.*)"',
-      multiLine: true,
-    ).firstMatch(header);
+    final timeLine = _headerTimeField(content);
     if (timeLine == null) {
       return null;
     }
     final offset = RegExp(
       r'([+-])(\d{1,2}):?(\d{2})?\s*$',
-    ).firstMatch(timeLine.group(1)!);
+    ).firstMatch(timeLine);
     if (offset == null) {
       return null;
     }
@@ -276,11 +287,21 @@ class DataManager {
     return sign * (hours * 60 + minutes) * 60 * 1000;
   }
 
-  static ({Map<String, List<Process>> processes, int utcOffsetMs})
-  _parseProcesses(
+  /// The zone abbreviation in the header's Time field, e.g. `MEST` in
+  /// `Time = "20/08/11 06:55:32 MEST"`. Display only: an abbreviation is
+  /// ambiguous, so it tells the user why times fall back to their own zone
+  /// rather than resolving to one. Null when the header gave a numeric offset.
+  static String? parseZoneAbbreviation(String content) {
+    final timeLine = _headerTimeField(content);
+    if (timeLine == null || parseUtcOffsetMs(content) != null) {
+      return null;
+    }
+    return RegExp(r'\s([A-Za-z]{2,5})\s*$').firstMatch(timeLine)?.group(1);
+  }
+
+  static Map<String, List<Process>> _parseProcesses(
     String content,
     Map<int, StatType> statTypes, {
-    int? utcOffsetMs,
     void Function(double)? onProgress,
   }) {
     final processes = <String, List<Process>>{};
@@ -299,14 +320,9 @@ class DataManager {
       // Session ID and Process ID are null if they're not positive
       final processId = int.parse(parts[3]) > 0 ? int.parse(parts[3]) : null;
       final sessionId = int.parse(parts[4]) > 0 ? int.parse(parts[4]) : null;
-      // Shift timestamps to the file's recorded timezone and treat them as
-      // UTC wall-clock values, so times display as the server saw them
-      // regardless of the viewer's timezone.
-      final rawMs = int.parse(parts[1]) * 1000;
-      utcOffsetMs ??= DateTime.fromMillisecondsSinceEpoch(
-        rawMs,
-      ).timeZoneOffset.inMilliseconds;
-      final timestampMs = rawMs + utcOffsetMs;
+      // Timestamps are stored as true instants; the zone they are shown in is
+      // applied only when formatting, by DisplayTime.
+      final timestampMs = int.parse(parts[1]) * 1000;
       final timestamp = DateTime.fromMillisecondsSinceEpoch(
         timestampMs,
         isUtc: true,
@@ -387,7 +403,7 @@ class DataManager {
       }
     }
 
-    return (processes: processes, utcOffsetMs: utcOffsetMs ?? 0);
+    return processes;
   }
 
   /// Find a process by its unique identifiers: StatTypeNum, ProcessName, ProcessId, SessionId

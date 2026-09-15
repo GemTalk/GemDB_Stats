@@ -17,7 +17,7 @@ class TimeSeries {
   TimeSeries({required this.statistic});
 
   Statistic statistic;
-  // Timestamps are pre-shifted to the file's recorded timezone and exposed as UTC DateTimes.
+  // Timestamps are true instants: epoch ms, exposed as UTC DateTimes.
   final Int64Buffer _timestampsMs = Int64Buffer();
   final Float64Buffer _values = Float64Buffer();
 
