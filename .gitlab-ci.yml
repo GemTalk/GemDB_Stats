@@ -1,57 +1,91 @@
 default:
-  image: ghcr.io/cirruslabs/flutter:latest
-  cache:
-    paths:
-      - $CI_PROJECT_DIR/.pub-cache/
+  image: ubuntu:22.04
   before_script:
-    - export PUB_CACHE=$CI_PROJECT_DIR/.pub-cache
-    - export PATH="$PATH":"$PUB_CACHE/bin"
+    - apt update
+    - apt install -y curl git unzip xz-utils zip libglu1-mesa wget
+    - wget https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.4-stable.tar.xz
+    - tar -xf ./flutter_linux_3.47.4-stable.tar.xz -C /opt/
+    - export PATH=/opt/flutter/bin/:$PATH
+    - chown -R root:root /opt/flutter/
     - flutter --version
 
-stages:
-  - test
+stages: [test, build, release]
 
-lint_app:
+# ---------- TEST ----------
+
+.checks:
   stage: test
+  parallel:
+    matrix:
+      - PKG: [core, mcp]
+        TOOL: dart
+      - PKG: app
+        TOOL: flutter
+
+lint:
+  extends: .checks
   script:
-    - cd app
-    - flutter pub get
+    - cd "$PKG"
+    - $TOOL pub get
     - dart format --output=none --set-exit-if-changed .
     - dart analyze
 
-lint_core:
-  stage: test
+test:
+  extends: .checks
   script:
-    - cd core
-    - dart pub get
-    - dart format --output=none --set-exit-if-changed .
-    - dart analyze
+    - cd "$PKG"
+    - $TOOL pub get
+    - $TOOL test
 
-lint_mcp:
-  stage: test
-  script:
-    - cd mcp
-    - dart pub get
-    - dart format --output=none --set-exit-if-changed .
-    - dart analyze
+# ---------- BUILD ----------
 
-test_app:
-  stage: test
-  script:
-  - cd app
-  - flutter pub get
-  - flutter test
+.build:
+  stage: build
+  when: manual
+  allow_failure: false
+  artifacts:
+    name: "vsd-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
+    expire_in: 6 months
 
-test_core:
-  stage: test
-  script:
-    - cd core
-    - dart pub get
-    - dart test
+build:linux:
+  extends: .build
+  tags: [linux-amd64-build]
+  script: ci/build_linux.sh
+  artifacts:
+    paths:
+      - app/build/linux/x64/release/bundle/
 
-test_mcp:
-  stage: test
+# build:macos:
+#   extends: .build
+#   tags: [macos-arm64-build]
+#   script: ci/build_macos.sh
+#   artifacts:
+#     paths:
+#       - dist/
+
+# build:windows:
+#   extends: .build
+#   tags: [windows-amd64-build]
+#   script: ci/build_windows.ps1
+#   # artifacts:
+#   #   paths:
+#   #     - dist/
+
+# ---------- RELEASE ----------
+
+.release:
+  stage: release
+  variables:
+    PKG_VERSION: "0.0.0"
+
+release:linux:
+  extends: .release
+  needs: ["build:linux"]
   script:
-    - cd mcp
-    - dart pub get
-    - dart test
+    - FILE="vsd-linux-x64-${CI_COMMIT_SHORT_SHA}.tar.gz"
+    - tar -czf "$FILE" -C app/build/linux/x64/release bundle
+    - |
+      curl --fail-with-body \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+        --upload-file "$FILE" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/vsd/${PKG_VERSION}/${FILE}"
