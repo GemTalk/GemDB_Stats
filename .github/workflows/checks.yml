@@ -1,0 +1,66 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: core
+            tool: dart
+          - pkg: mcp
+            tool: dart
+          - pkg: app
+            tool: flutter
+    defaults:
+      run:
+        working-directory: ${{ matrix.pkg }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: ${{ matrix.tool }} pub get
+
+      - run: dart format --output=none --set-exit-if-changed .
+
+      - run: dart analyze
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: core
+            tool: dart
+          - pkg: mcp
+            tool: dart
+          - pkg: app
+            tool: flutter
+    defaults:
+      run:
+        working-directory: ${{ matrix.pkg }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: ${{ matrix.tool }} pub get
+
+      - run: ${{ matrix.tool }} test
