@@ -2,11 +2,21 @@ name: build
 
 on:
   workflow_dispatch:
+    inputs:
+      linux:
+        description: Linux
+        type: boolean
+        default: true
+      windows:
+        description: Windows
+        type: boolean
+        default: true
 
 jobs:
   linux:
     name: build:linux
     runs-on: ubuntu-22.04
+    if: ${{ inputs.linux }}
     steps:
       - uses: actions/checkout@v7
 
@@ -29,7 +39,7 @@ jobs:
   windows:
     name: build:windows
     runs-on: windows-latest
-    # if: ${{ inputs.windows }}
+    if: ${{ inputs.windows }}
     steps:
       - uses: actions/checkout@v7
 
