@@ -25,3 +25,28 @@ jobs:
           name: vsd-${{ steps.vars.outputs.sha_short }}-linux
           path: app/build/linux/x64/release/bundle/
           retention-days: 90
+
+  windows:
+    name: build:windows
+    runs-on: windows-latest
+    # if: ${{ inputs.windows }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: vars
+        shell: bash
+        run: echo "sha_short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - shell: pwsh
+        run: .github/scripts/build_windows.ps1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsd-${{ steps.vars.outputs.sha_short }}-windows
+          path: app/build/windows/x64/runner/Release/
+          retention-days: 90
