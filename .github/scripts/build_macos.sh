@@ -19,8 +19,8 @@ set -euo pipefail
 cd app
 
 RELEASE_DIR=build/macos/Build/Products/Release
-APP="$RELEASE_DIR/vsd.app"
-ZIP="$RELEASE_DIR/vsd.app.zip"
+APP="$RELEASE_DIR/GemDB Stats.app"
+ZIP="$RELEASE_DIR/GemDB-Stats.zip"
 
 WORK_DIR="$(mktemp -d)"
 KEYCHAIN="$WORK_DIR/signing.keychain-db"

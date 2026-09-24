@@ -94,5 +94,5 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: vsd-${{ steps.vars.outputs.sha_short }}-macos
-          path: app/build/macos/Build/Products/Release/vsd.app.zip
+          path: app/build/macos/Build/Products/Release/GemDB-Stats.zip
           retention-days: 90
