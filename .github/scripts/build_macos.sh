@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds the macOS app and, when signing secrets are available, signs it with the
-# Developer ID certificate and notarizes it so it launches without Gatekeeper
-# warnings. Without those secrets it falls back to an ad-hoc signature.
+# Builds the macOS app, signs it with the Developer ID certificate and notarizes
+# it so it launches without Gatekeeper warnings. Fails before building if the
+# secrets for either step are missing.
 #
 # Signing:
 #   MACOS_CERTIFICATE           base64 of the Developer ID Application .p12
@@ -32,13 +32,37 @@ cleanup() {
 }
 trap cleanup EXIT
 
-have_signing_secrets() {
-  [[ -n "${MACOS_CERTIFICATE:-}" && -n "${MACOS_CERTIFICATE_PASSWORD:-}" ]]
+# Prints the names among "$@" whose variables are unset or empty.
+missing() {
+  local name
+  for name in "$@"; do
+    [[ -n "${!name:-}" ]] || printf '%s ' "$name"
+  done
 }
 
-have_notary_secrets() {
-  [[ -n "${NOTARY_KEY:-}" && -n "${NOTARY_KEY_ID:-}" && -n "${NOTARY_ISSUER_ID:-}" ]] ||
-    [[ -n "${NOTARY_APPLE_ID:-}" && -n "${NOTARY_PASSWORD:-}" && -n "${NOTARY_TEAM_ID:-}" ]]
+have_notary_key() {
+  [[ -z "$(missing NOTARY_KEY NOTARY_KEY_ID NOTARY_ISSUER_ID)" ]]
+}
+
+have_notary_apple_id() {
+  [[ -z "$(missing NOTARY_APPLE_ID NOTARY_PASSWORD NOTARY_TEAM_ID)" ]]
+}
+
+# Fail before a long build rather than upload an app Gatekeeper blocks.
+require_secrets() {
+  local ok=1 gap
+  gap="$(missing MACOS_CERTIFICATE MACOS_CERTIFICATE_PASSWORD)"
+  if [[ -n "$gap" ]]; then
+    echo "Missing signing secrets: $gap" >&2
+    ok=0
+  fi
+  if ! have_notary_key && ! have_notary_apple_id; then
+    echo "Missing notary secrets, need one complete set:" >&2
+    echo "  API key, missing: $(missing NOTARY_KEY NOTARY_KEY_ID NOTARY_ISSUER_ID)" >&2
+    echo "  Apple ID, missing: $(missing NOTARY_APPLE_ID NOTARY_PASSWORD NOTARY_TEAM_ID)" >&2
+    ok=0
+  fi
+  [[ $ok -eq 1 ]]
 }
 
 import_certificate() {
@@ -98,7 +122,7 @@ resign_app() {
 
 notarize() {
   local -a auth
-  if [[ -n "${NOTARY_KEY:-}" ]]; then
+  if have_notary_key; then
     printf '%s' "$NOTARY_KEY" | base64 --decode > "$WORK_DIR/notary_key.p8"
     auth=(--key "$WORK_DIR/notary_key.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID")
   else
@@ -129,40 +153,27 @@ notarize() {
   spctl --assess --type execute --verbose "$APP"
 }
 
+require_secrets || exit 1
+
 if [[ -n "${CI:-}" ]]; then
   git config --global --add safe.directory "${FLUTTER_HOME:-/sdks/flutter}"
 fi
 
-if have_signing_secrets; then
-  import_certificate
-  IDENTITY="$(signing_identity)" || exit 1
-  echo "Signing with: $IDENTITY"
-  # The keychain search list is per-session, so codesign needs to be pointed at it.
-  export FLUTTER_XCODE_OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN"
-  # Leave CODE_SIGN_IDENTITY to the Runner's Release config, as a local build
-  # does. FLUTTER_XCODE_* settings apply to every target, and forcing a real
-  # identity onto the Swift package resource bundles makes them demand a team.
-else
-  echo "WARNING: no signing secrets, building an ad-hoc signed app that Gatekeeper will block." >&2
-  # The Release config asks for a Developer ID certificate that is not here.
-  export FLUTTER_XCODE_CODE_SIGN_IDENTITY="-"
-  export FLUTTER_XCODE_CODE_SIGN_STYLE="Manual"
-  export FLUTTER_XCODE_DEVELOPMENT_TEAM=""
-  export FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER=""
-fi
+import_certificate
+IDENTITY="$(signing_identity)" || exit 1
+echo "Signing with: $IDENTITY"
+# The keychain search list is per-session, so codesign needs to be pointed at it.
+export FLUTTER_XCODE_OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN"
+# Leave CODE_SIGN_IDENTITY to the Runner's Release config, as a local build
+# does. FLUTTER_XCODE_* settings apply to every target, and forcing a real
+# identity onto the Swift package resource bundles makes them demand a team.
 
 flutter pub get
 flutter build macos --release
 
-if have_signing_secrets; then
-  resign_app
-  codesign --verify --deep --strict --verbose=2 "$APP"
-  if have_notary_secrets; then
-    notarize
-  else
-    echo "WARNING: signed but not notarized, no notary credentials." >&2
-  fi
-fi
+resign_app
+codesign --verify --deep --strict --verbose=2 "$APP"
+notarize
 
 # Zip with ditto: upload-artifact does not preserve the symlinks and exec bits
 # inside the .app bundle, which would leave it unlaunchable.
