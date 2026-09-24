@@ -64,8 +64,8 @@ Grab the latest build for your platform from the
 | Platform | Install |
 | --- | --- |
 | macOS 12+ | Open the `.dmg` and drag **GemDB Stats** to Applications. The app is signed and notarized. |
-| Windows | Unzip and run `vsd.exe`. Keep the `data/` folder and DLLs next to it. |
-| Linux | Extract the bundle and run `./vsd`. Needs a GTK 3 runtime (`libgtk-3-0`). |
+| Windows | Unzip and run `GemDBStats.exe`. Keep the `data/` folder and DLLs next to it. |
+| Linux | Extract the bundle and run `./gemdb-stats`. Needs a GTK 3 runtime (`libgtk-3-0`). |
 
 ### Open a statmon file
 
