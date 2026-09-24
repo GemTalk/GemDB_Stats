@@ -79,6 +79,23 @@ signing_identity() {
   printf '%s' "$found"
 }
 
+# `flutter build` runs a plain xcodebuild build, not an archive, so Xcode signs
+# for development: no secure timestamp and an injected get-task-allow
+# entitlement, both of which notarization rejects. Re-sign for distribution as
+# app/tool/release_macos.sh does, children before their parents (find -d) so
+# each signature seals already-signed contents.
+resign_app() {
+  local -a sign=(codesign --force --timestamp --options runtime --keychain "$KEYCHAIN" --sign "$IDENTITY")
+  local item
+  while IFS= read -r -d '' item; do
+    "${sign[@]}" "$item"
+  done < <(find -d "$APP/Contents" \
+    \( -name '*.framework' -o -name '*.dylib' -o -name '*.bundle' \) \
+    -not -path '*/Frameworks/*/Versions/*/Frameworks/*' -print0)
+
+  "${sign[@]}" --entitlements macos/Runner/Release.entitlements "$APP"
+}
+
 notarize() {
   local -a auth
   if [[ -n "${NOTARY_KEY:-}" ]]; then
@@ -138,6 +155,7 @@ flutter pub get
 flutter build macos --release
 
 if have_signing_secrets; then
+  resign_app
   codesign --verify --deep --strict --verbose=2 "$APP"
   if have_notary_secrets; then
     notarize
