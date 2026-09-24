@@ -3,13 +3,15 @@ import 'package:flutter/material.dart';
 class AiKeySetupView extends StatefulWidget {
   const AiKeySetupView({
     required this.onSave,
-    this.initialKey = '',
+    this.hasExistingKey = false,
+    this.onCancel,
     this.errorHint,
     super.key,
   });
 
   final void Function(String key) onSave;
-  final String initialKey;
+  final bool hasExistingKey;
+  final VoidCallback? onCancel;
   final String? errorHint;
 
   @override
@@ -17,18 +19,46 @@ class AiKeySetupView extends StatefulWidget {
 }
 
 class _AiKeySetupViewState extends State<AiKeySetupView> {
-  late final TextEditingController _controller;
+  static final _placeholder = '•' * 108;
+
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _showingPlaceholder = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.initialKey);
+    _focusNode.addListener(_handleFocusChange);
+    if (widget.hasExistingKey) {
+      _showPlaceholder();
+    }
   }
 
   @override
   void dispose() {
+    _focusNode.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _showPlaceholder() {
+    _showingPlaceholder = true;
+    _controller.text = _placeholder;
+  }
+
+  /// Focusing the field clears the stand-in so whatever is typed or pasted
+  /// replaces it; leaving the field empty brings the stand-in back.
+  void _handleFocusChange() {
+    if (_focusNode.hasFocus) {
+      if (_showingPlaceholder) {
+        setState(() {
+          _showingPlaceholder = false;
+          _controller.clear();
+        });
+      }
+    } else if (widget.hasExistingKey && _controller.text.isEmpty) {
+      setState(_showPlaceholder);
+    }
   }
 
   @override
@@ -40,7 +70,7 @@ class _AiKeySetupViewState extends State<AiKeySetupView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Enter your Anthropic API key to use the AI assistant.',
+            'Enter your Anthropic API key\nto use the AI assistant.',
             style: TextStyle(fontSize: 13, color: Colors.black54),
             textAlign: TextAlign.center,
           ),
@@ -50,6 +80,10 @@ class _AiKeySetupViewState extends State<AiKeySetupView> {
             builder: (context, _) {
               return TextField(
                 controller: _controller,
+                focusNode: _focusNode,
+                obscureText: widget.hasExistingKey,
+                autocorrect: false,
+                enableSuggestions: false,
                 style: const TextStyle(fontSize: 13),
                 decoration: const InputDecoration(
                   hintText: 'sk-ant-...',
@@ -84,9 +118,9 @@ class _AiKeySetupViewState extends State<AiKeySetupView> {
           ListenableBuilder(
             listenable: _controller,
             builder: (context, _) {
-              final isEmpty = _controller.text.trim().isEmpty;
+              final canSave = !_showingPlaceholder && _controller.text.trim().isNotEmpty;
               return FilledButton(
-                onPressed: isEmpty ? null : () => widget.onSave(_controller.text.trim()),
+                onPressed: canSave ? () => widget.onSave(_controller.text.trim()) : null,
                 style: FilledButton.styleFrom(
                   textStyle: const TextStyle(fontSize: 13),
                   padding: const EdgeInsets.symmetric(vertical: 10),
@@ -95,6 +129,17 @@ class _AiKeySetupViewState extends State<AiKeySetupView> {
               );
             },
           ),
+          if (widget.onCancel != null) ...[
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: widget.onCancel,
+              style: TextButton.styleFrom(
+                textStyle: const TextStyle(fontSize: 13),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              child: const Text('Cancel'),
+            ),
+          ],
         ],
       ),
     );

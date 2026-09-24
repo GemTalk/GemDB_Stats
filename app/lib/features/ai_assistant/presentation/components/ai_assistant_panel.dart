@@ -34,7 +34,7 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
   // ------- Key setup -------
   bool _keySetupMode = false;
   String? _keySetupErrorHint;
-  String _storedKey = '';
+  bool _hasStoredKey = false;
 
   // ------- Conversation state -------
   final List<AiMessage> _messages = [];
@@ -53,7 +53,7 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
   Future<void> _initServices() async {
     final prefs = await SharedPreferences.getInstance();
     final key = prefs.getString(_kApiKeyPref) ?? '';
-    _storedKey = key;
+    _hasStoredKey = key.trim().isNotEmpty;
 
     if (key.trim().isEmpty) {
       if (mounted) {
@@ -95,7 +95,7 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
   Future<void> _saveApiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kApiKeyPref, key);
-    _storedKey = key;
+    _hasStoredKey = true;
 
     _aiService?.dispose();
     unawaited(_mcpServer?.dispose());
@@ -273,7 +273,8 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
             child: _keySetupMode
                 ? AiKeySetupView(
                     onSave: _saveApiKey,
-                    initialKey: _storedKey,
+                    hasExistingKey: _hasStoredKey,
+                    onCancel: _servicesReady ? () => setState(() => _keySetupMode = false) : null,
                     errorHint: _keySetupErrorHint,
                   )
                 : AiMessagesBody(
