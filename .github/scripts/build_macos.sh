@@ -8,8 +8,6 @@ set -euo pipefail
 # Signing:
 #   MACOS_CERTIFICATE           base64 of the Developer ID Application .p12
 #   MACOS_CERTIFICATE_PASSWORD  password the .p12 was exported with
-#   MACOS_SIGNING_IDENTITY      optional, only to disambiguate a .p12 holding
-#                               several Developer ID Application certificates
 #
 # Notarization, either an App Store Connect API key (preferred):
 #   NOTARY_KEY                  base64 of the AuthKey_XXXX.p8
@@ -67,14 +65,8 @@ import_certificate() {
   security list-keychains -d user -s "$KEYCHAIN" $existing
 }
 
-# The identity name is not a secret and typing it into one is a needless way to
-# get a mismatch, so read it back off the certificate we just imported.
+# Fail early, before a long build, if the .p12 is not a Developer ID certificate.
 signing_identity() {
-  if [[ -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
-    printf '%s' "$MACOS_SIGNING_IDENTITY"
-    return
-  fi
-
   local found
   found="$(security find-identity -p codesigning "$KEYCHAIN" |
     awk -F'"' '/"Developer ID Application/ { print $2; exit }')"
@@ -130,7 +122,9 @@ if have_signing_secrets; then
   echo "Signing with: $IDENTITY"
   # The keychain search list is per-session, so codesign needs to be pointed at it.
   export FLUTTER_XCODE_OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN"
-  export FLUTTER_XCODE_CODE_SIGN_IDENTITY="$IDENTITY"
+  # Leave CODE_SIGN_IDENTITY to the Runner's Release config, as a local build
+  # does. FLUTTER_XCODE_* settings apply to every target, and forcing a real
+  # identity onto the Swift package resource bundles makes them demand a team.
 else
   echo "WARNING: no signing secrets, building an ad-hoc signed app that Gatekeeper will block." >&2
   # The Release config asks for a Developer ID certificate that is not here.
