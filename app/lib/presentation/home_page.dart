@@ -52,7 +52,7 @@ class _HomePageState extends State<HomePage> {
 
   List<PlatformMenu> _buildPlatformMenus() => [
     PlatformMenu(
-      label: 'vsd',
+      label: 'GemDB Stats',
       menus: [
         PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
         PlatformMenuItemGroup(

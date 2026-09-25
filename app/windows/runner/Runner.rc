@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "vsd" "\0"
+            VALUE "CompanyName", "GemTalk Systems" "\0"
+            VALUE "FileDescription", "GemDB Stats" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "vsd" "\0"
+            VALUE "InternalName", "GemDBStats" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 GemTalk Systems. All rights reserved." "\0"
-            VALUE "OriginalFilename", "vsd.exe" "\0"
-            VALUE "ProductName", "vsd" "\0"
+            VALUE "OriginalFilename", "GemDBStats.exe" "\0"
+            VALUE "ProductName", "GemDB Stats" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
