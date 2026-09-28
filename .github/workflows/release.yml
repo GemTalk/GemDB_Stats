@@ -71,11 +71,18 @@ jobs:
             exit 1
           fi
 
+          if ! git check-ref-format "refs/tags/v$version"; then
+            echo "::error::v$version is not a valid tag name"
+            exit 1
+          fi
+
           prerelease=false
           [[ "$version" == *-* ]] && prerelease=true
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=v$version"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Bump version and push tag
         env:
