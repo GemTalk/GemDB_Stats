@@ -1,0 +1,175 @@
+name: release
+
+# Publishes a GitHub release with the macOS, Windows and Linux apps. Run it from
+# the Actions tab on main and enter the new version: it sets that version in
+# app/pubspec.yaml, commits to main, tags the commit, builds the ticked
+# platforms from the tag with build.yml, and attaches them to a release. A
+# version with a suffix (0.2.0-beta.1) is a pre-release.
+#
+# A tag pushed with GITHUB_TOKEN starts no other workflow run, so this run
+# carries on to build and publish itself rather than rely on the tag push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version (e.g. 1.0.0)
+        required: true
+        type: string
+      linux:
+        description: Linux
+        type: boolean
+        default: true
+      windows:
+        description: Windows
+        type: boolean
+        default: true
+      macos:
+        description: macOS
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: release:version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
+      prerelease: ${{ steps.vars.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: vars
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          ANY_PLATFORM: ${{ inputs.linux || inputs.windows || inputs.macos }}
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "::error::Run releases from main, not $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+          if [[ "$ANY_PLATFORM" != true ]]; then
+            echo "::error::Tick at least one platform"
+            exit 1
+          fi
+
+          version="${INPUT_VERSION#v}"
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Version $version is not MAJOR.MINOR.PATCH[-PRERELEASE]"
+            exit 1
+          fi
+
+          if ! git check-ref-format "refs/tags/v$version"; then
+            echo "::error::v$version is not a valid tag name"
+            exit 1
+          fi
+
+          prerelease=false
+          [[ "$version" == *-* ]] && prerelease=true
+          {
+            echo "tag=v$version"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bump version and push tag
+        env:
+          TAG: ${{ steps.vars.outputs.tag }}
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            echo "::error::Tag $TAG already exists"
+            exit 1
+          fi
+
+          # Keep a +build suffix if pubspec has one, bumped by one.
+          current="$(sed -n 's/^version: *//p' app/pubspec.yaml | tr -d '[:space:]')"
+          new="$VERSION"
+          [[ "$current" == *+* ]] && new="$VERSION+$(( ${current##*+} + 1 ))"
+          sed -i "s/^version: .*/version: $new/" app/pubspec.yaml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git commit -am "chore: release $TAG"
+            git push origin HEAD:main
+          fi
+          git tag -a "$TAG" -m "GemDB Stats $VERSION"
+          git push origin "$TAG"
+
+  build:
+    needs: version
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      linux: ${{ inputs.linux }}
+      windows: ${{ inputs.windows }}
+      macos: ${{ inputs.macos }}
+      ref: ${{ needs.version.outputs.tag }}
+
+  publish:
+    name: release:publish
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
+      PRERELEASE: ${{ needs.version.outputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # One folder per platform the build ran for, named gemdb-stats-<sha>-<platform>.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: gemdb-stats-*
+          path: artifacts
+
+      - name: Package release files
+        run: |
+          shopt -s nullglob
+          name="GemDB-Stats-$VERSION"
+          mkdir dist
+
+          for dir in artifacts/*-linux; do
+            # upload-artifact's zip drops the exec bit.
+            chmod +x "$dir/gemdb-stats"
+            mv "$dir" "artifacts/$name"
+            tar -czf "dist/$name-linux-x64.tar.gz" -C artifacts "$name"
+            rm -rf "artifacts/$name"
+          done
+
+          for dir in artifacts/*-windows; do
+            mv "$dir" "artifacts/$name"
+            (cd artifacts && zip -qr "../dist/$name-windows-x64.zip" "$name")
+          done
+
+          for dir in artifacts/*-macos; do
+            mv "$dir/GemDB-Stats.zip" "dist/$name-macos.zip"
+          done
+
+          cd dist
+          sha256sum GemDB-Stats-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - run: |
+          flags=()
+          [[ "$PRERELEASE" == true ]] && flags+=(--prerelease)
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "GemDB Stats $VERSION" \
+            --generate-notes \
+            --verify-tag \
+            "${flags[@]}"
