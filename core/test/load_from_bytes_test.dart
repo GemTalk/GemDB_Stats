@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -47,32 +48,60 @@ void main() {
   }
 
   for (final (label, bytes) in [('plain', plain), ('gzipped', gzipped)]) {
-    test(
-      'loadFromStream parses a $label file arriving in small chunks',
-      () async {
-        // 7-byte chunks split lines, numbers and the gzip stream mid-way.
-        final chunks = [
-          for (var i = 0; i < bytes.length; i += 7)
-            bytes.sublist(i, i + 7 > bytes.length ? bytes.length : i + 7),
-        ];
-        final dm = DataManager();
-        final progress = <double>[];
-        await dm.loadFromStream(
-          Stream.fromIterable(chunks),
-          length: bytes.length,
-          onProgress: progress.add,
-        );
+    for (final size in [1, 7]) {
+      test(
+        'loadFromStream parses a $label file arriving in $size-byte chunks',
+        () async {
+          // An empty first chunk, then chunks that split the gzip magic
+          // number, lines and numbers.
+          final chunks = [
+            <int>[],
+            for (var i = 0; i < bytes.length; i += size)
+              bytes.sublist(i, math.min(i + size, bytes.length)),
+          ];
+          final dm = DataManager();
+          final progress = <double>[];
+          await dm.loadFromStream(
+            Stream.fromIterable(chunks),
+            length: bytes.length,
+            onProgress: progress.add,
+          );
 
-        expect(progress.last, 1.0);
-        final process = dm.allProcesses.single;
-        expect(process.samples, 3);
-        expect(
-          process.statisticData['DataPageReads']!.points.map((p) => p.value),
-          [10, 12, 15],
-        );
-      },
-    );
+          expect(progress.last, 1.0);
+          final process = dm.allProcesses.single;
+          expect(process.samples, 3);
+          expect(
+            process.statisticData['DataPageReads']!.points.map((p) => p.value),
+            [10, 12, 15],
+          );
+        },
+      );
+    }
   }
+
+  test('a process\'s series share one set of timestamps', () async {
+    const twoStats = '''
+STATMON "4"
+StatTypes = [
+Shrpc  ( StatTypeNum Time ProcessName ProcessId SessionId CacheSerialNum DataPageReads BitmapPageReads ) 1
+]
+ENDHEADER
+1 1771546154 ShrPcMonitor 18322 -1 0 10 1
+1 1771546155 ShrPcMonitor 18322 -1 0 12 2
+''';
+    final dm = DataManager();
+    await dm.loadFromBytes(Uint8List.fromList(utf8.encode(twoStats)));
+
+    final series = dm.allProcesses.single.statisticData.values.toList();
+    expect(series, hasLength(2));
+    expect(identical(series[0].timestamps, series[1].timestamps), isTrue);
+    expect(series[0].timestamps.length, 2);
+    expect(series[1].points.map((p) => p.value), [1, 2]);
+    expect(
+      series[1].points.last.timestamp,
+      DateTime.utc(2026, 2, 20, 0, 9, 15),
+    );
+  });
 
   test(
     'loadFromStream gives up early on a large file with no header',

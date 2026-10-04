@@ -134,19 +134,23 @@ class DataManager {
 
   /// Passes [input] through gunzip if it starts with the gzip magic number.
   static Stream<List<int>> _decompressIfGzip(Stream<List<int>> input) async* {
+    // The magic number may be split across chunks, or follow empty ones.
     final chunks = StreamIterator(input);
-    if (!await chunks.moveNext()) {
-      return;
+    final head = <List<int>>[];
+    var headLength = 0;
+    while (headLength < 2 && await chunks.moveNext()) {
+      head.add(chunks.current);
+      headLength += chunks.current.length;
     }
-    final first = chunks.current;
     Stream<List<int>> all() async* {
-      yield first;
+      yield* Stream.fromIterable(head);
       while (await chunks.moveNext()) {
         yield chunks.current;
       }
     }
 
-    final isGzip = first.length >= 2 && first[0] == 0x1f && first[1] == 0x8b;
+    final magic = head.expand((chunk) => chunk).take(2).toList();
+    final isGzip = magic.length == 2 && magic[0] == 0x1f && magic[1] == 0x8b;
     yield* isGzip ? host.gunzip(all()) : all();
   }
 
@@ -381,6 +385,8 @@ class _StatmonParser {
   final _header = StringBuffer();
   Map<int, StatType>? _statTypes;
   final _processes = <String, List<Process>>{};
+  // Each process's sample times, shared by all of its series.
+  final _timestamps = Map<Process, Timestamps>.identity();
 
   void addLine(String line) {
     if (_statTypes == null) {
@@ -404,6 +410,14 @@ class _StatmonParser {
   _ParseResult finish() {
     if (_statTypes == null) {
       throw _missingEndHeader;
+    }
+    for (final timestamps in _timestamps.values) {
+      timestamps.trim();
+    }
+    for (final process in _processes.values.expand((list) => list)) {
+      for (final series in process.statisticData.values) {
+        series.trim();
+      }
     }
     final header = _header.toString();
     return (
@@ -461,6 +475,7 @@ class _StatmonParser {
       // Update end time if process already exists (handles multiple entries for same process)
       existingProcess.endTime = timestamp;
       existingProcess.samples += 1;
+      _timestamps[existingProcess]!.add(timestampMs);
 
       // Add new data points to existing process
       for (
@@ -470,8 +485,7 @@ class _StatmonParser {
       ) {
         final stat = existingProcess.type.statistics[statIdx];
 
-        existingProcess.statisticData[stat.name]!.add(
-          timestampMs,
+        existingProcess.statisticData[stat.name]!.addValue(
           _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
         );
       }
@@ -487,7 +501,11 @@ class _StatmonParser {
         sessionId: sessionId,
       );
 
-      // Initialize TimeSeries for each statistic in the StatType
+      final timestamps = Timestamps()..add(timestampMs);
+      _timestamps[newProcess] = timestamps;
+
+      // Initialize TimeSeries for each statistic in the StatType, sharing
+      // the process's timestamps
       for (
         int statIdx = 0;
         statIdx < newProcess.type.statistics.length;
@@ -495,11 +513,10 @@ class _StatmonParser {
       ) {
         final stat = newProcess.type.statistics[statIdx];
 
-        newProcess.statisticData[stat.name] = TimeSeries(statistic: stat)
-          ..add(
-            timestampMs,
-            _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
-          );
+        newProcess.statisticData[stat.name] = TimeSeries(
+          statistic: stat,
+          timestamps: timestamps,
+        )..addValue(_parseStatValue(parts[statIdx + 6], stat.type).toDouble());
       }
 
       processes[processName]!.add(newProcess);
