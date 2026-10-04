@@ -64,3 +64,28 @@ jobs:
       - run: ${{ matrix.tool }} pub get
 
       - run: ${{ matrix.tool }} test
+
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # vsd_core must parse in a browser: no isolates, no dart:io, no Int64List.
+      - name: test core in Chrome
+        working-directory: core
+        run: |
+          dart pub get
+          dart test -p chrome
+          dart test -p chrome -c dart2wasm
+
+      - name: build app for the web
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build web --wasm --no-web-resources-cdn

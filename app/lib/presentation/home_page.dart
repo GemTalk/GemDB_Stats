@@ -1,7 +1,9 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:multi_split_view/multi_split_view.dart';
-import 'package:vsd/features/ai_assistant/presentation/components/ai_assistant_panel.dart';
+import 'package:vsd/features/ai_assistant/presentation/components/ai_assistant_panel_platform.dart';
 import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd/presentation/chart/multi_chart_controller.dart';
 import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
@@ -153,7 +155,7 @@ class _HomePageState extends State<HomePage> {
     setState(() => _zone = zone);
   }
 
-  Future<void> _handleFileSelected(String path) async {
+  Future<void> _handleFileSelected(PlatformFile file) async {
     // _loadProgress is null when not loading
     if (_loadProgress != null) {
       return;
@@ -168,14 +170,18 @@ class _HomePageState extends State<HomePage> {
       selectedStatistic = null;
     });
     try {
-      await DataManager().loadFromFile(
-        path,
-        onProgress: (p) {
-          if (mounted) {
-            setState(() => _loadProgress = p);
-          }
-        },
-      );
+      void onProgress(double p) {
+        if (mounted) {
+          setState(() => _loadProgress = p);
+        }
+      }
+
+      // The web has no file system, so the picker hands over the bytes.
+      if (kIsWeb) {
+        await DataManager().loadFromBytes(file.bytes!, onProgress: onProgress);
+      } else {
+        await DataManager().loadFromFile(file.path!, onProgress: onProgress);
+      }
       setState(() {
         _loadProgress = null;
         _dataVersion++;
@@ -197,11 +203,15 @@ class _HomePageState extends State<HomePage> {
           children: [
             FileBar(
               onFileSelected: _handleFileSelected,
-              trailing: ToolIconButton(
-                icon: FontAwesomeIcons.message,
-                tooltip: 'Toggle Chat',
-                onTap: _toggleAiPanel,
-              ),
+              // The AI assistant is left out of the web build for now: a
+              // browser would need a CORS opt-in and would hold the API key.
+              trailing: kIsWeb
+                  ? null
+                  : ToolIconButton(
+                      icon: FontAwesomeIcons.message,
+                      tooltip: 'Toggle Chat',
+                      onTap: _toggleAiPanel,
+                    ),
             ),
             if (_loadProgress != null)
               progressIndicator()

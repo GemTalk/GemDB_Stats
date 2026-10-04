@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:vsd_core/src/models/display_time.dart';
@@ -10,6 +8,10 @@ import 'package:vsd_core/src/models/stat_type.dart';
 import 'package:vsd_core/src/models/statistic.dart';
 import 'package:vsd_core/src/models/time_series.dart';
 import 'package:vsd_core/src/stat_definitions.g.dart';
+
+import 'platform/parse_host_web.dart'
+    if (dart.library.io) 'platform/parse_host_io.dart'
+    as host;
 
 class DataManager {
   factory DataManager() {
@@ -29,85 +31,79 @@ class DataManager {
     return processes.values.expand((list) => list).toList();
   }
 
-  /// Load and parse data from a statmon file (optionally gzip-compressed)
-  Future<void> loadFromFile(
-    String path, {
+  /// Load and parse data from a statmon file (optionally gzip-compressed).
+  ///
+  /// Not available on the web, which has no file system; use [loadFromBytes].
+  Future<void> loadFromFile(String path, {void Function(double)? onProgress}) {
+    return _load(host.fileReader(path), onProgress: onProgress);
+  }
+
+  /// Load and parse the contents of a statmon file (optionally
+  /// gzip-compressed, detected from the bytes). Works on every platform.
+  Future<void> loadFromBytes(
+    Uint8List bytes, {
+    void Function(double)? onProgress,
+  }) {
+    return _load(() => bytes, onProgress: onProgress);
+  }
+
+  Future<void> _load(
+    Uint8List Function() read, {
     void Function(double)? onProgress,
   }) async {
     statTypes.clear();
     processes.clear();
     DisplayTime.fileZone = FileZone.unknown;
 
-    // Use an isolate to read, decompress and parse the file without blocking the UI
-    final receivePort = ReceivePort();
-    await Isolate.spawn<_ParseArgs>(
-      (_ParseArgs args) {
-        try {
-          args.sendPort.send(0.02);
-          final bytes = File(args.path).readAsBytesSync();
-          final content = args.path.endsWith('.gz')
-              ? utf8.decode(gzip.decode(bytes))
-              : utf8.decode(bytes);
-          if (!content.contains('ENDHEADER')) {
-            args.sendPort.send('Not a valid statmon file: missing ENDHEADER');
-            return;
-          }
-          args.sendPort.send(0.05);
-          final parsedStatTypes = parseStatTypes(content, args.statistics);
-          args.sendPort.send(0.1);
-          final parsed = _parseProcesses(
-            content,
-            parsedStatTypes,
-            onProgress: (p) => args.sendPort.send(0.1 + 0.9 * p),
-          );
-          // Isolate.exit transfers ownership of the result without copying it,
-          // unlike sendPort.send which deep-copies the whole object graph.
-          Isolate.exit(args.sendPort, (
-            statTypes: parsedStatTypes,
-            processes: parsed,
-            fileUtcOffsetMs: parseUtcOffsetMs(content),
-            fileZoneAbbreviation: parseZoneAbbreviation(content),
-          ));
-        } catch (e) {
-          args.sendPort.send(e.toString());
-        }
-      },
-      (
-        sendPort: receivePort.sendPort,
-        path: path,
-        statistics: Map.from(statistics),
-      ),
+    // On native platforms this runs on an isolate so the UI isn't blocked.
+    final result = await host.runParse(
+      _parseJob(read, Map.from(statistics)),
+      onProgress: onProgress,
     );
-
-    // Listen for messages from the isolate
-    await for (final message in receivePort) {
-      if (message is double) {
-        onProgress?.call(message);
-      } else if (message is String) {
-        receivePort.close();
-        throw FormatException(message);
-      } else {
-        final result =
-            message
-                as ({
-                  Map<int, StatType> statTypes,
-                  Map<String, List<Process>> processes,
-                  int? fileUtcOffsetMs,
-                  String? fileZoneAbbreviation,
-                });
-        statTypes.addAll(result.statTypes);
-        processes.addAll(result.processes);
-        // Only the file's own zone changes here; the user's display-zone
-        // selection deliberately survives a file load.
-        DisplayTime.fileZone = FileZone(
-          offsetMs: result.fileUtcOffsetMs,
-          abbreviation: result.fileZoneAbbreviation,
-        );
-        receivePort.close();
-        break;
-      }
-    }
+    statTypes.addAll(result.statTypes);
+    processes.addAll(result.processes);
+    // Only the file's own zone changes here; the user's display-zone
+    // selection deliberately survives a file load.
+    DisplayTime.fileZone = FileZone(
+      offsetMs: result.fileUtcOffsetMs,
+      abbreviation: result.fileZoneAbbreviation,
+    );
   }
+
+  // Static so the job closure captures only [read] and [statistics]: it may be
+  // sent to another isolate.
+  static Future<_ParseResult> Function(void Function(double) progress)
+  _parseJob(Uint8List Function() read, Map<String, Statistic> statistics) {
+    return (progress) async {
+      progress(0.02);
+      final bytes = read();
+      final content = utf8.decode(
+        _isGzip(bytes) ? host.decodeGzip(bytes) : bytes,
+      );
+      if (!content.contains('ENDHEADER')) {
+        throw const FormatException(
+          'Not a valid statmon file: missing ENDHEADER',
+        );
+      }
+      progress(0.05);
+      final parsedStatTypes = parseStatTypes(content, statistics);
+      progress(0.1);
+      final parsed = await _parseProcesses(
+        content,
+        parsedStatTypes,
+        onProgress: (p) => progress(0.1 + 0.9 * p),
+      );
+      return (
+        statTypes: parsedStatTypes,
+        processes: parsed,
+        fileUtcOffsetMs: parseUtcOffsetMs(content),
+        fileZoneAbbreviation: parseZoneAbbreviation(content),
+      );
+    };
+  }
+
+  static bool _isGzip(Uint8List bytes) =>
+      bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b;
 
   /// Load and parse statistics definitions from the embedded vsd.stats.tcl.
   ///
@@ -299,18 +295,21 @@ class DataManager {
     return RegExp(r'\s([A-Za-z]{2,5})\s*$').firstMatch(timeLine)?.group(1);
   }
 
-  static Map<String, List<Process>> _parseProcesses(
+  /// Parses the sample lines after ENDHEADER. Async only so it can yield to
+  /// the event loop between chunks: on the web this runs on the UI thread.
+  static Future<Map<String, List<Process>>> _parseProcesses(
     String content,
     Map<int, StatType> statTypes, {
     void Function(double)? onProgress,
-  }) {
+  }) async {
     final processes = <String, List<Process>>{};
     final processesRaw = content.split('ENDHEADER')[1].trim().split('\n');
     final total = processesRaw.length;
     final step = (total / 100).ceil().clamp(1, total);
     for (int i = 0; i < processesRaw.length; i++) {
-      if (onProgress != null && i % step == 0) {
-        onProgress(i / total);
+      if (i % step == 0) {
+        onProgress?.call(i / total);
+        await Future<void>.delayed(Duration.zero);
       }
       final line = processesRaw[i];
       final parts = line.split(' ');
@@ -430,10 +429,11 @@ class DataManager {
   }
 }
 
-typedef _ParseArgs = ({
-  SendPort sendPort,
-  String path,
-  Map<String, Statistic> statistics,
+typedef _ParseResult = ({
+  Map<int, StatType> statTypes,
+  Map<String, List<Process>> processes,
+  int? fileUtcOffsetMs,
+  String? fileZoneAbbreviation,
 });
 
 /// Parses a raw string value from the data file into the correct [num] type.

@@ -17,8 +17,10 @@ class TimeSeries {
   TimeSeries({required this.statistic});
 
   Statistic statistic;
-  // Timestamps are true instants: epoch ms, exposed as UTC DateTimes.
-  final Int64Buffer _timestampsMs = Int64Buffer();
+  // Timestamps are true instants: epoch ms, exposed as UTC DateTimes. Held as
+  // doubles because the web has no Int64List; epoch ms is far below 2^53, so
+  // every value is exact.
+  final Float64Buffer _timestampsMs = Float64Buffer();
   final Float64Buffer _values = Float64Buffer();
 
   /// Read-only view of the samples as DataPoints, created on demand.
@@ -27,7 +29,7 @@ class TimeSeries {
   int get length => _values.length;
 
   void add(int timestampMs, double value) {
-    _timestampsMs.add(timestampMs);
+    _timestampsMs.add(timestampMs.toDouble());
     _values.add(value);
   }
 
@@ -67,7 +69,7 @@ class _PointsView extends ListBase<DataPoint> {
   @override
   DataPoint operator [](int index) => DataPoint(
     timestamp: DateTime.fromMillisecondsSinceEpoch(
-      _series._timestampsMs[index],
+      _series._timestampsMs[index].toInt(),
       isUtc: true,
     ),
     value: _series._asNum(_series._values[index]),

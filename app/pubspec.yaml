@@ -17,6 +17,7 @@ dependencies:
   macos_ui: ^2.2.2
   mcp_dart: ^2.1.1
   multi_split_view: ^3.6.1
+  path: ^1.9.1
   pluto_grid: ^8.1.0
   shadcn_ui: ^0.54.0
   shared_preferences: ^2.5.5
