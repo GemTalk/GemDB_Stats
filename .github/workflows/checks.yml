@@ -84,8 +84,13 @@ jobs:
           dart test -p chrome
           dart test -p chrome -c dart2wasm
 
-      - name: build app for the web
+      # The picker-to-parser handoff, run where the picker returns bytes.
+      - name: test opening a file in Chrome
         working-directory: app
         run: |
           flutter pub get
-          flutter build web --wasm --no-web-resources-cdn
+          flutter test --platform chrome test/file_open_test.dart
+
+      - name: build app for the web
+        working-directory: app
+        run: flutter build web --wasm --no-web-resources-cdn

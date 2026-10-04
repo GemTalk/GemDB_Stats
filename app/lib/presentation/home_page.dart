@@ -176,8 +176,9 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      // The web has no file system, so the picker hands over the bytes.
-      if (kIsWeb) {
+      // The web has no file system, so there the picker hands over the bytes
+      // instead of a path.
+      if (file.bytes != null) {
         await DataManager().loadFromBytes(file.bytes!, onProgress: onProgress);
       } else {
         await DataManager().loadFromFile(file.path!, onProgress: onProgress);
