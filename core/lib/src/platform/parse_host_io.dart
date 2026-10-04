@@ -1,15 +1,19 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:typed_data';
 
-/// Native implementation of the parse host: files come from disk, gzip uses
-/// `dart:io`'s zlib, and the parse runs on a background isolate.
+/// Native implementation of the parse host: files are streamed from disk,
+/// gzip uses `dart:io`'s zlib, and the parse runs on a background isolate.
 
-/// Returns a reader for [path] that is safe to send to another isolate.
-Uint8List Function() fileReader(String path) =>
-    () => File(path).readAsBytesSync();
+/// Opens [path] for streaming. The returned function is safe to send to
+/// another isolate, where it is called.
+({Stream<List<int>> bytes, int? length}) Function() fileSource(String path) =>
+    () {
+      final file = File(path);
+      return (bytes: file.openRead(), length: file.lengthSync());
+    };
 
-List<int> decodeGzip(List<int> bytes) => gzip.decode(bytes);
+Stream<List<int>> gunzip(Stream<List<int>> input) =>
+    input.transform(gzip.decoder);
 
 /// Runs [job] on a background isolate so it doesn't block the UI, forwarding
 /// its progress to [onProgress]. Any error becomes a [FormatException].

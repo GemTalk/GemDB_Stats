@@ -46,6 +46,47 @@ void main() {
     });
   }
 
+  for (final (label, bytes) in [('plain', plain), ('gzipped', gzipped)]) {
+    test(
+      'loadFromStream parses a $label file arriving in small chunks',
+      () async {
+        // 7-byte chunks split lines, numbers and the gzip stream mid-way.
+        final chunks = [
+          for (var i = 0; i < bytes.length; i += 7)
+            bytes.sublist(i, i + 7 > bytes.length ? bytes.length : i + 7),
+        ];
+        final dm = DataManager();
+        final progress = <double>[];
+        await dm.loadFromStream(
+          Stream.fromIterable(chunks),
+          length: bytes.length,
+          onProgress: progress.add,
+        );
+
+        expect(progress.last, 1.0);
+        final process = dm.allProcesses.single;
+        expect(process.samples, 3);
+        expect(
+          process.statisticData['DataPageReads']!.points.map((p) => p.value),
+          [10, 12, 15],
+        );
+      },
+    );
+  }
+
+  test(
+    'loadFromStream gives up early on a large file with no header',
+    () async {
+      // 64 MB of lines that never reach ENDHEADER.
+      final line = Uint8List.fromList(utf8.encode('${'x' * 1023}\n'));
+      final chunks = Stream.fromIterable(List.filled(64 * 1024, line));
+      await expectLater(
+        DataManager().loadFromStream(chunks),
+        throwsA(isA<FormatException>()),
+      );
+    },
+  );
+
   test('loadFromBytes rejects a file without ENDHEADER', () {
     expect(
       DataManager().loadFromBytes(Uint8List.fromList(utf8.encode('nope'))),

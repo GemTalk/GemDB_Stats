@@ -9,8 +9,8 @@ const _kLastDirectoryKey = 'last_file_directory';
 class FileBar extends StatefulWidget {
   const FileBar({super.key, this.onFileSelected, this.trailing});
 
-  /// Called with the picked file. On the web it carries the file's bytes and
-  /// no path; elsewhere it carries a path and no bytes.
+  /// Called with the picked file. On the web it carries a stream of the
+  /// file's bytes and no path; elsewhere it carries a path and no stream.
   final ValueChanged<PlatformFile>? onFileSelected;
   final Widget? trailing;
 
@@ -28,7 +28,9 @@ class _FileBarState extends State<FileBar> {
 
     final result = await FilePicker.platform.pickFiles(
       initialDirectory: kIsWeb ? null : lastDir,
-      withData: kIsWeb,
+      // Streamed, not read whole first: the load can start, and show its
+      // progress, as soon as the file is picked.
+      withReadStream: kIsWeb,
     );
 
     if (result != null) {

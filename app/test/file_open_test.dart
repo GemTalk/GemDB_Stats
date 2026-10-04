@@ -21,9 +21,9 @@ ENDHEADER
 1 1771546155 ShrPcMonitor 18322 -1 0 12
 ''';
 
-/// Returns a file the way the web picker does: bytes and no path.
+/// Returns a file the way the web picker does: a stream and no path.
 class _FakeFilePicker extends FilePicker {
-  bool? withData;
+  bool? withReadStream;
 
   @override
   Future<FilePickerResult?> pickFiles({
@@ -40,10 +40,14 @@ class _FakeFilePicker extends FilePicker {
     bool lockParentWindow = false,
     bool readSequential = false,
   }) async {
-    this.withData = withData;
+    this.withReadStream = withReadStream;
     final bytes = Uint8List.fromList(utf8.encode(_statmon));
     return FilePickerResult([
-      PlatformFile(name: 'statmon.out', size: bytes.length, bytes: bytes),
+      PlatformFile(
+        name: 'statmon.out',
+        size: bytes.length,
+        readStream: Stream.value(bytes),
+      ),
     ]);
   }
 }
@@ -51,7 +55,7 @@ class _FakeFilePicker extends FilePicker {
 void main() {
   setUpAll(() => DataManager().loadStatistics());
 
-  testWidgets('a picked file with bytes and no path loads and lists its processes', (tester) async {
+  testWidgets('a picked file with a stream and no path loads and lists its processes', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final picker = _FakeFilePicker();
     FilePicker.platform = picker;
@@ -71,8 +75,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 20));
     }
 
-    // The picker is asked for bytes only where there's no file system.
-    expect(picker.withData, kIsWeb);
+    // The picker is asked for a stream only where there's no file system.
+    expect(picker.withReadStream, kIsWeb);
     expect(find.text('statmon.out'), findsOneWidget);
     expect(find.text('ShrPcMonitor'), findsWidgets);
     // HomePage's menu bar holds macOS-only items; other platforms throw while

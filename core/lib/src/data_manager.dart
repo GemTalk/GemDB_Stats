@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -33,9 +34,9 @@ class DataManager {
 
   /// Load and parse data from a statmon file (optionally gzip-compressed).
   ///
-  /// Not available on the web, which has no file system; use [loadFromBytes].
+  /// Not available on the web, which has no file system; use [loadFromStream].
   Future<void> loadFromFile(String path, {void Function(double)? onProgress}) {
-    return _load(host.fileReader(path), onProgress: onProgress);
+    return _load(host.fileSource(path), onProgress: onProgress);
   }
 
   /// Load and parse the contents of a statmon file (optionally
@@ -44,22 +45,42 @@ class DataManager {
     Uint8List bytes, {
     void Function(double)? onProgress,
   }) {
-    return _load(() => bytes, onProgress: onProgress);
+    return _load(
+      () => (bytes: Stream.value(bytes), length: bytes.length),
+      onProgress: onProgress,
+    );
+  }
+
+  /// Load and parse a statmon file (optionally gzip-compressed) as it is read,
+  /// never holding all of it at once. [length] is the stream's total size in
+  /// bytes, for progress. Parses on the calling isolate, so on native
+  /// platforms prefer [loadFromFile].
+  Future<void> loadFromStream(
+    Stream<List<int>> bytes, {
+    int? length,
+    void Function(double)? onProgress,
+  }) {
+    return _load(
+      () => (bytes: bytes, length: length),
+      onProgress: onProgress,
+      inBackground: false,
+    );
   }
 
   Future<void> _load(
-    Uint8List Function() read, {
+    _Source source, {
     void Function(double)? onProgress,
+    bool inBackground = true,
   }) async {
     statTypes.clear();
     processes.clear();
     DisplayTime.fileZone = FileZone.unknown;
 
-    // On native platforms this runs on an isolate so the UI isn't blocked.
-    final result = await host.runParse(
-      _parseJob(read, Map.from(statistics)),
-      onProgress: onProgress,
-    );
+    final job = _parseJob(source, Map.from(statistics));
+    // On native platforms runParse uses an isolate so the UI isn't blocked.
+    final result = inBackground
+        ? await host.runParse(job, onProgress: onProgress)
+        : await job(onProgress ?? (_) {});
     statTypes.addAll(result.statTypes);
     processes.addAll(result.processes);
     // Only the file's own zone changes here; the user's display-zone
@@ -70,40 +91,64 @@ class DataManager {
     );
   }
 
-  // Static so the job closure captures only [read] and [statistics]: it may be
-  // sent to another isolate.
+  // Static so the job closure captures only [source] and [statistics]: it may
+  // be sent to another isolate.
+  //
+  // The file is streamed and parsed a line at a time, never as one String: a
+  // large file decompresses to more text than a browser String can hold.
   static Future<_ParseResult> Function(void Function(double) progress)
-  _parseJob(Uint8List Function() read, Map<String, Statistic> statistics) {
+  _parseJob(_Source source, Map<String, Statistic> statistics) {
     return (progress) async {
-      progress(0.02);
-      final bytes = read();
-      final content = utf8.decode(
-        _isGzip(bytes) ? host.decodeGzip(bytes) : bytes,
-      );
-      if (!content.contains('ENDHEADER')) {
-        throw const FormatException(
-          'Not a valid statmon file: missing ENDHEADER',
-        );
+      progress(0);
+      final (:bytes, :length) = source();
+      var bytesRead = 0;
+      final counted = bytes.map((chunk) {
+        bytesRead += chunk.length;
+        return chunk;
+      });
+
+      final parser = _StatmonParser(statistics);
+      var partialLine = '';
+      final sinceYield = Stopwatch()..start();
+      await for (final text in _decompressIfGzip(
+        counted,
+      ).transform(utf8.decoder)) {
+        final lines = (partialLine + text).split('\n');
+        partialLine = lines.removeLast();
+        lines.forEach(parser.addLine);
+        if (length != null && length > 0) {
+          progress(bytesRead / length);
+        }
+        // On the web this runs on the UI thread: let it paint now and then.
+        if (sinceYield.elapsedMilliseconds > 50) {
+          await Future<void>.delayed(Duration.zero);
+          sinceYield.reset();
+        }
       }
-      progress(0.05);
-      final parsedStatTypes = parseStatTypes(content, statistics);
-      progress(0.1);
-      final parsed = await _parseProcesses(
-        content,
-        parsedStatTypes,
-        onProgress: (p) => progress(0.1 + 0.9 * p),
-      );
-      return (
-        statTypes: parsedStatTypes,
-        processes: parsed,
-        fileUtcOffsetMs: parseUtcOffsetMs(content),
-        fileZoneAbbreviation: parseZoneAbbreviation(content),
-      );
+      parser.addLine(partialLine);
+      final result = parser.finish();
+      progress(1);
+      return result;
     };
   }
 
-  static bool _isGzip(Uint8List bytes) =>
-      bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b;
+  /// Passes [input] through gunzip if it starts with the gzip magic number.
+  static Stream<List<int>> _decompressIfGzip(Stream<List<int>> input) async* {
+    final chunks = StreamIterator(input);
+    if (!await chunks.moveNext()) {
+      return;
+    }
+    final first = chunks.current;
+    Stream<List<int>> all() async* {
+      yield first;
+      while (await chunks.moveNext()) {
+        yield chunks.current;
+      }
+    }
+
+    final isGzip = first.length >= 2 && first[0] == 0x1f && first[1] == 0x8b;
+    yield* isGzip ? host.gunzip(all()) : all();
+  }
 
   /// Load and parse statistics definitions from the embedded vsd.stats.tcl.
   ///
@@ -295,116 +340,6 @@ class DataManager {
     return RegExp(r'\s([A-Za-z]{2,5})\s*$').firstMatch(timeLine)?.group(1);
   }
 
-  /// Parses the sample lines after ENDHEADER. Async only so it can yield to
-  /// the event loop between chunks: on the web this runs on the UI thread.
-  static Future<Map<String, List<Process>>> _parseProcesses(
-    String content,
-    Map<int, StatType> statTypes, {
-    void Function(double)? onProgress,
-  }) async {
-    final processes = <String, List<Process>>{};
-    final processesRaw = content.split('ENDHEADER')[1].trim().split('\n');
-    final total = processesRaw.length;
-    final step = (total / 100).ceil().clamp(1, total);
-    for (int i = 0; i < processesRaw.length; i++) {
-      if (i % step == 0) {
-        onProgress?.call(i / total);
-        await Future<void>.delayed(Duration.zero);
-      }
-      final line = processesRaw[i];
-      final parts = line.split(' ');
-
-      final processName = parts[2];
-      final statTypeId = int.parse(parts[0]);
-      // Session ID and Process ID are null if they're not positive
-      final processId = int.parse(parts[3]) > 0 ? int.parse(parts[3]) : null;
-      final sessionId = int.parse(parts[4]) > 0 ? int.parse(parts[4]) : null;
-      // Timestamps are stored as true instants; the zone they are shown in is
-      // applied only when formatting, by DisplayTime.
-      final timestampMs = int.parse(parts[1]) * 1000;
-      final timestamp = DateTime.fromMillisecondsSinceEpoch(
-        timestampMs,
-        isUtc: true,
-      );
-
-      // Initialize list for this process name if it doesn't exist
-      if (!processes.containsKey(processName)) {
-        processes[processName] = [];
-      }
-
-      // Find existing process with matching StatTypeNum, ProcessName, ProcessId, SessionId
-      Process? existingProcess;
-      for (final process in processes[processName]!) {
-        if (process.type.id == statTypeId &&
-            process.name == processName &&
-            process.processId == processId &&
-            process.sessionId == sessionId) {
-          existingProcess = process;
-          break;
-        }
-      }
-
-      if (existingProcess != null) {
-        // Samples for a process are expected to be strictly increasing in time.
-        // statmonitor can occasionally emit an out-of-order or duplicate record
-        // (e.g. a stale sample re-appended at the end of the file); skip it so
-        // the sample count stays accurate and the chart's domain (which assumes
-        // points are chronologically ordered) isn't collapsed by a rogue point.
-        if (timestampMs <= existingProcess.endTime.millisecondsSinceEpoch) {
-          continue;
-        }
-
-        // Update end time if process already exists (handles multiple entries for same process)
-        existingProcess.endTime = timestamp;
-        existingProcess.samples += 1;
-
-        // Add new data points to existing process
-        for (
-          int statIdx = 0;
-          statIdx < existingProcess.type.statistics.length;
-          statIdx++
-        ) {
-          final stat = existingProcess.type.statistics[statIdx];
-
-          existingProcess.statisticData[stat.name]!.add(
-            timestampMs,
-            _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
-          );
-        }
-      } else {
-        // Otherwise, create new process entry
-        final newProcess = Process(
-          name: processName,
-          type: statTypes[statTypeId]!,
-          startTime: timestamp,
-          endTime: timestamp,
-          samples: 1,
-          processId: processId,
-          sessionId: sessionId,
-        );
-
-        // Initialize TimeSeries for each statistic in the StatType
-        for (
-          int statIdx = 0;
-          statIdx < newProcess.type.statistics.length;
-          statIdx++
-        ) {
-          final stat = newProcess.type.statistics[statIdx];
-
-          newProcess.statisticData[stat.name] = TimeSeries(statistic: stat)
-            ..add(
-              timestampMs,
-              _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
-            );
-        }
-
-        processes[processName]!.add(newProcess);
-      }
-    }
-
-    return processes;
-  }
-
   /// Find a process by its unique identifiers: StatTypeNum, ProcessName, ProcessId, SessionId
   Process? findProcess({
     required int statTypeId,
@@ -428,6 +363,151 @@ class DataManager {
     return null;
   }
 }
+
+/// Parses a statmon file one line at a time: header lines until ENDHEADER,
+/// then one sample per line.
+class _StatmonParser {
+  _StatmonParser(this._statistics);
+
+  // A real header is a few hundred KB; give up long before reading a large
+  // file that isn't a statmon file at all.
+  static const _maxHeaderLength = 16 * 1024 * 1024;
+
+  static const _missingEndHeader = FormatException(
+    'Not a valid statmon file: missing ENDHEADER',
+  );
+
+  final Map<String, Statistic> _statistics;
+  final _header = StringBuffer();
+  Map<int, StatType>? _statTypes;
+  final _processes = <String, List<Process>>{};
+
+  void addLine(String line) {
+    if (_statTypes == null) {
+      final end = line.indexOf('ENDHEADER');
+      if (end == -1) {
+        _header.writeln(line);
+        if (_header.length > _maxHeaderLength) {
+          throw _missingEndHeader;
+        }
+        return;
+      }
+      _header.write(line.substring(0, end));
+      _statTypes = DataManager.parseStatTypes(_header.toString(), _statistics);
+      line = line.substring(end + 'ENDHEADER'.length);
+    }
+    if (line.trim().isNotEmpty) {
+      _addSample(line, _statTypes!);
+    }
+  }
+
+  _ParseResult finish() {
+    if (_statTypes == null) {
+      throw _missingEndHeader;
+    }
+    final header = _header.toString();
+    return (
+      statTypes: _statTypes!,
+      processes: _processes,
+      fileUtcOffsetMs: DataManager.parseUtcOffsetMs(header),
+      fileZoneAbbreviation: DataManager.parseZoneAbbreviation(header),
+    );
+  }
+
+  void _addSample(String line, Map<int, StatType> statTypes) {
+    final processes = _processes;
+    final parts = line.split(' ');
+
+    final processName = parts[2];
+    final statTypeId = int.parse(parts[0]);
+    // Session ID and Process ID are null if they're not positive
+    final processId = int.parse(parts[3]) > 0 ? int.parse(parts[3]) : null;
+    final sessionId = int.parse(parts[4]) > 0 ? int.parse(parts[4]) : null;
+    // Timestamps are stored as true instants; the zone they are shown in is
+    // applied only when formatting, by DisplayTime.
+    final timestampMs = int.parse(parts[1]) * 1000;
+    final timestamp = DateTime.fromMillisecondsSinceEpoch(
+      timestampMs,
+      isUtc: true,
+    );
+
+    // Initialize list for this process name if it doesn't exist
+    if (!processes.containsKey(processName)) {
+      processes[processName] = [];
+    }
+
+    // Find existing process with matching StatTypeNum, ProcessName, ProcessId, SessionId
+    Process? existingProcess;
+    for (final process in processes[processName]!) {
+      if (process.type.id == statTypeId &&
+          process.name == processName &&
+          process.processId == processId &&
+          process.sessionId == sessionId) {
+        existingProcess = process;
+        break;
+      }
+    }
+
+    if (existingProcess != null) {
+      // Samples for a process are expected to be strictly increasing in time.
+      // statmonitor can occasionally emit an out-of-order or duplicate record
+      // (e.g. a stale sample re-appended at the end of the file); skip it so
+      // the sample count stays accurate and the chart's domain (which assumes
+      // points are chronologically ordered) isn't collapsed by a rogue point.
+      if (timestampMs <= existingProcess.endTime.millisecondsSinceEpoch) {
+        return;
+      }
+
+      // Update end time if process already exists (handles multiple entries for same process)
+      existingProcess.endTime = timestamp;
+      existingProcess.samples += 1;
+
+      // Add new data points to existing process
+      for (
+        int statIdx = 0;
+        statIdx < existingProcess.type.statistics.length;
+        statIdx++
+      ) {
+        final stat = existingProcess.type.statistics[statIdx];
+
+        existingProcess.statisticData[stat.name]!.add(
+          timestampMs,
+          _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
+        );
+      }
+    } else {
+      // Otherwise, create new process entry
+      final newProcess = Process(
+        name: processName,
+        type: statTypes[statTypeId]!,
+        startTime: timestamp,
+        endTime: timestamp,
+        samples: 1,
+        processId: processId,
+        sessionId: sessionId,
+      );
+
+      // Initialize TimeSeries for each statistic in the StatType
+      for (
+        int statIdx = 0;
+        statIdx < newProcess.type.statistics.length;
+        statIdx++
+      ) {
+        final stat = newProcess.type.statistics[statIdx];
+
+        newProcess.statisticData[stat.name] = TimeSeries(statistic: stat)
+          ..add(
+            timestampMs,
+            _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
+          );
+      }
+
+      processes[processName]!.add(newProcess);
+    }
+  }
+}
+
+typedef _Source = ({Stream<List<int>> bytes, int? length}) Function();
 
 typedef _ParseResult = ({
   Map<int, StatType> statTypes,
