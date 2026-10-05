@@ -13,8 +13,14 @@ class FileBar extends StatefulWidget {
   /// file's bytes and no path; elsewhere it carries a path and no stream.
   final ValueChanged<PlatformFile>? onFileSelected;
 
-  /// Pinned to the left edge, clear of the centered file name.
+  /// Pinned to the left edge, clear of the centered file name. At most
+  /// [leadingSlot] wide, less its 2-pixel inset and a gap.
   final Widget? leading;
+
+  /// Space kept free on each side of the bar when there is a [leading]
+  /// widget: on its side so the name never runs under it, and on the other so
+  /// the name stays centered.
+  static const double leadingSlot = 40;
   final Widget? trailing;
 
   @override
@@ -72,17 +78,29 @@ class _FileBarState extends State<FileBar> {
         alignment: Alignment.center,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.leading != null ? FileBar.leadingSlot : 12,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               spacing: 4,
               children: [
-                fileNameDisplay(colorScheme),
+                // Flexible, so a long name shrinks to the space there is.
+                Flexible(child: fileNameDisplay(colorScheme)),
                 if (widget.trailing != null) widget.trailing!,
               ],
             ),
           ),
-          if (widget.leading != null) Positioned(left: 2, child: widget.leading!),
+          if (widget.leading != null)
+            Positioned(
+              left: 2,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: FileBar.leadingSlot - 6,
+                ),
+                child: widget.leading,
+              ),
+            ),
         ],
       ),
     );
@@ -115,13 +133,15 @@ class _FileBarState extends State<FileBar> {
                 size: 18,
                 color: _fileName != null ? colorScheme.primary : Colors.black54,
               ),
-              Text(
-                _fileName ?? 'No file selected',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: _fileName != null ? colorScheme.onSurface : Colors.black54,
+              Flexible(
+                child: Text(
+                  _fileName ?? 'No file selected',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: _fileName != null ? colorScheme.onSurface : Colors.black54,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
