@@ -1,13 +1,6 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
+import 'package:vsd/presentation/menu/app_menu.dart';
 import 'package:vsd_core/vsd_core.dart';
-
-/// PlatformMenuItem has no `checked` property, so a checkmark is a label
-/// prefix. Unchecked rows are padded to the same width so a radio group
-/// aligns (approximately — the menu font is proportional).
-const _checked = '✓ ';
-const _unchecked = '   ';
-
-String _mark(bool isSelected) => isSelected ? _checked : _unchecked;
 
 /// Builds the View ▸ Time Zone submenu.
 ///
@@ -15,36 +8,35 @@ String _mark(bool isSelected) => isSelected ? _checked : _unchecked;
 /// under "Other" by region so the menu stays compact. The selection is marked
 /// at each visible level so it remains easy to find. [at] fixes the instant
 /// used for offset resolution, keeping tests stable across DST changes.
-List<PlatformMenuItem> buildTimeZoneMenuItems({
+List<AppMenuEntry> buildTimeZoneMenuEntries({
   required DisplayZone current,
   required ValueChanged<DisplayZone> onSelect,
   DateTime? at,
 }) {
   final instant = at ?? DateTime.now().toUtc();
 
-  PlatformMenuItem item(DisplayZone zone) => PlatformMenuItem(
-    label: '${_mark(zone == current)}${DisplayTime.labelFor(zone, at: instant)}',
+  AppMenuItem item(DisplayZone zone) => AppMenuItem(
+    label: DisplayTime.labelFor(zone, at: instant),
     onSelected: () => onSelect(zone),
+    checked: zone == current,
   );
 
   return [
     item(const DisplayZone.file()),
     item(const DisplayZone.utc()),
     item(const DisplayZone.systemLocal()),
-    PlatformMenuItemGroup(
-      members: [
-        PlatformMenu(
-          // No ellipsis: this opens a submenu, not a dialog.
-          label: '${_mark(current is NamedDisplayZone)}Other',
-          menus: _regionMenus(current, instant, onSelect),
-        ),
-      ],
+    const AppMenuDivider(),
+    AppSubmenu(
+      // No ellipsis: this opens a submenu, not a dialog.
+      label: 'Other',
+      entries: _regionMenus(current, instant, onSelect),
+      checked: current is NamedDisplayZone,
     ),
   ];
 }
 
 /// One submenu per region prefix ("Europe", "America", ...), alphabetically.
-List<PlatformMenu> _regionMenus(
+List<AppMenuEntry> _regionMenus(
   DisplayZone current,
   DateTime instant,
   ValueChanged<DisplayZone> onSelect,
@@ -63,15 +55,17 @@ List<PlatformMenu> _regionMenus(
 
   return [
     for (final region in byRegion.keys.toList()..sort())
-      PlatformMenu(
-        label: '${_mark(selected != null && selected.startsWith('$region/'))}$region',
-        menus: [
+      AppSubmenu(
+        label: region,
+        entries: [
           for (final name in byRegion[region]!)
-            PlatformMenuItem(
-              label: '${_mark(name == selected)}${_zoneItemLabel(name, instant)}',
+            AppMenuItem(
+              label: _zoneItemLabel(name, instant),
               onSelected: () => onSelect(DisplayZone.named(name)),
+              checked: name == selected,
             ),
         ],
+        checked: selected != null && selected.startsWith('$region/'),
       ),
   ];
 }
