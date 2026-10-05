@@ -93,4 +93,4 @@ jobs:
 
       - name: build app for the web
         working-directory: app
-        run: flutter build web --wasm --no-web-resources-cdn
+        run: flutter build web --no-web-resources-cdn
