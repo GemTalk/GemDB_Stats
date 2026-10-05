@@ -40,6 +40,21 @@ Google's servers, which a webview's Content Security Policy blocks. The
 output is `app/build/web/`. Ship that folder in the extension, pinned to a
 GemDB Stats commit, as GemDB Code does for Grail.
 
+Two things a webview needs are built in, so `index.html` and
+`flutter_bootstrap.js` can be used as they are:
+
+- **The app leaves the page's URL alone.** A webview's page
+  (`vscode-webview://…`) and its `<base href>` (the resource origin) are on
+  different origins, so the history update Flutter normally makes on startup
+  throws a `SecurityError` and the app stops at the loading screen. The app
+  has no routes, so it turns that update off.
+- **No service worker.** `web/flutter_bootstrap.js` loads the app without
+  registering Flutter's (deprecated) service worker; VS Code runs its own in
+  the webview.
+
+The build also holds files a JS build never loads (`skwasm*`, `*.symbols`,
+`manifest.json`, `icons/`), which the extension may leave out of the `.vsix`.
+
 ### Showing it
 
 A sketch of the extension side. It is untested in VS Code: check it in the
@@ -127,10 +142,11 @@ function withCsp(webview: vscode.Webview, build: vscode.Uri, html: string): stri
 }
 ```
 
-This CSP was checked by serving the release build with the same policy (with
-`'self'` in place of `webview.cspSource`) and a stand-in for the VS Code API.
-The app started, said `ready`, and streamed the file sent in `open`, with no
-policy violations.
+This CSP was checked the way a webview serves the page: the rewritten
+`index.html` on one origin, the build and the statmon file on another (with
+that origin in place of `webview.cspSource`), and a stand-in for the VS Code
+API. The app started, said `ready`, and streamed the file sent in `open`, with
+no policy violations and no service worker registered.
 
 ## In a browser
 
