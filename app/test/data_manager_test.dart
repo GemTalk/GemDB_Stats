@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vsd_core/vsd_core.dart';
 
@@ -141,6 +144,32 @@ void main() {
 
       final stone = dm.allProcesses.firstWhere((p) => p.name == 'gs64stone');
       expect(stone.samples, 38);
+    });
+
+    test('loadFromBytes matches loadFromFile, plain or gzipped', () async {
+      final dm = DataManager();
+      dm.statistics.addAll(statisticsMap);
+      await dm.loadFromFile('test/test_data/statmon76637.out');
+      final expected = {for (final p in dm.allProcesses) p.identityKey: p.samples};
+
+      final bytes = File('test/test_data/statmon76637.out').readAsBytesSync();
+      for (final input in [bytes, Uint8List.fromList(gzip.encode(bytes))]) {
+        final progress = <double>[];
+        await dm.loadFromBytes(input, onProgress: progress.add);
+        expect(progress, isNotEmpty);
+        expect({for (final p in dm.allProcesses) p.identityKey: p.samples}, expected);
+        expect(DisplayTime.fileZone.offsetMs, -8 * 3600000);
+      }
+    });
+
+    test('loadFromBytes rejects a file without ENDHEADER', () async {
+      final dm = DataManager();
+      await expectLater(
+        dm.loadFromBytes(Uint8List.fromList('not a statmon file'.codeUnits)),
+        throwsA(
+          isA<FormatException>().having((e) => e.message, 'message', 'Not a valid statmon file: missing ENDHEADER'),
+        ),
+      );
     });
   });
 }

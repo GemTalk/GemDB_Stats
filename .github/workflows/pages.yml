@@ -1,0 +1,70 @@
+name: pages
+
+# Publishes the web build of the app to GitHub Pages. Requires Pages to be
+# enabled with "GitHub Actions" as its source (Settings → Pages).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - app/**
+      - core/**
+      - mcp/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+# Actions are pinned to commit SHAs because this workflow publishes the site.
+# Only the deploy job, which runs no third-party code, can write to Pages.
+permissions:
+  contents: read
+
+# One deployment at a time; let an in-progress one finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read # configure-pages looks up the site's URL
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          cache: true
+
+      # The site is served from a subpath (/GemDB_Stats/), which Flutter
+      # resolves its assets against. Not --wasm: Wasm holds the parsed data
+      # in the browser's capped GC heap, where large files run out of memory.
+      - name: build app for the web
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build web --release --no-web-resources-cdn \
+            --base-href "${{ steps.pages.outputs.base_path }}/"
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: app/build/web
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

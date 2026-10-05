@@ -1,7 +1,7 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _kLastDirectoryKey = 'last_file_directory';
@@ -9,7 +9,9 @@ const _kLastDirectoryKey = 'last_file_directory';
 class FileBar extends StatefulWidget {
   const FileBar({super.key, this.onFileSelected, this.trailing});
 
-  final ValueChanged<String>? onFileSelected;
+  /// Called with the picked file. On the web it carries a stream of the
+  /// file's bytes and no path; elsewhere it carries a path and no stream.
+  final ValueChanged<PlatformFile>? onFileSelected;
   final Widget? trailing;
 
   @override
@@ -25,14 +27,20 @@ class _FileBarState extends State<FileBar> {
     final lastDir = prefs.getString(_kLastDirectoryKey);
 
     final result = await FilePicker.platform.pickFiles(
-      initialDirectory: lastDir,
+      initialDirectory: kIsWeb ? null : lastDir,
+      // Streamed, not read whole first: the load can start, and show its
+      // progress, as soon as the file is picked.
+      withReadStream: kIsWeb,
     );
 
-    if (result != null && result.files.single.path != null) {
-      final path = result.files.single.path!;
-      var name = result.files.single.name;
+    if (result != null) {
+      final file = result.files.single;
+      var name = file.name;
 
-      await prefs.setString(_kLastDirectoryKey, File(path).parent.path);
+      // The web has no file system, so there is no folder to remember.
+      if (!kIsWeb && file.path != null) {
+        await prefs.setString(_kLastDirectoryKey, p.dirname(file.path!));
+      }
 
       if (name.endsWith('.gz')) {
         name = name.substring(0, name.length - 3);
@@ -41,7 +49,7 @@ class _FileBarState extends State<FileBar> {
       setState(() {
         _fileName = name;
       });
-      widget.onFileSelected?.call(path);
+      widget.onFileSelected?.call(file);
     }
   }
 
