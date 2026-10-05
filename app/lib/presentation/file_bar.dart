@@ -7,11 +7,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _kLastDirectoryKey = 'last_file_directory';
 
 class FileBar extends StatefulWidget {
-  const FileBar({super.key, this.onFileSelected, this.trailing});
+  const FileBar({super.key, this.onFileSelected, this.leading, this.trailing});
 
   /// Called with the picked file. On the web it carries a stream of the
   /// file's bytes and no path; elsewhere it carries a path and no stream.
   final ValueChanged<PlatformFile>? onFileSelected;
+
+  /// Pinned to the left edge, clear of the centered file name.
+  final Widget? leading;
   final Widget? trailing;
 
   @override
@@ -60,21 +63,27 @@ class _FileBarState extends State<FileBar> {
     return Container(
       width: double.infinity,
       height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: Colors.black.withValues(alpha: .08)),
         ),
       ),
-      child: Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 4,
-          children: [
-            fileNameDisplay(colorScheme),
-            if (widget.trailing != null) widget.trailing!,
-          ],
-        ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 4,
+              children: [
+                fileNameDisplay(colorScheme),
+                if (widget.trailing != null) widget.trailing!,
+              ],
+            ),
+          ),
+          if (widget.leading != null) Positioned(left: 2, child: widget.leading!),
+        ],
       ),
     );
   }
