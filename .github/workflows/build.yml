@@ -15,6 +15,10 @@ on:
         description: macOS
         type: boolean
         default: true
+      web:
+        description: Web
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       linux:
@@ -24,6 +28,9 @@ on:
         type: boolean
         default: true
       macos:
+        type: boolean
+        default: true
+      web:
         type: boolean
         default: true
       ref:
@@ -116,4 +123,35 @@ jobs:
         with:
           name: gemdb-stats-${{ steps.vars.outputs.sha_short }}-macos
           path: app/build/macos/Build/Products/Release/GemDB-Stats.zip
+          retention-days: 90
+
+  # The web app as GemDB Code embeds it: JS only (no --wasm), its renderer
+  # bundled (--no-web-resources-cdn), and base href "/", which the host
+  # rewrites. See docs/embedding.md.
+  web:
+    name: build:web
+    runs-on: ubuntu-latest
+    if: ${{ inputs.web }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - id: vars
+        run: echo "sha_short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - working-directory: app
+        run: |
+          flutter pub get
+          flutter build web --release --no-web-resources-cdn
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gemdb-stats-${{ steps.vars.outputs.sha_short }}-web
+          path: app/build/web/
           retention-days: 90
