@@ -70,9 +70,9 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   final ValueNotifier<double?> _mouseX = ValueNotifier(null);
 
   // Active zoom window in data coordinates; null means "show full range".
-  // minY/maxY apply to the primary (left) axis, minY2/maxY2 to the secondary
-  // (right) axis when the chart is dual-axis.
-  ({double minX, double maxX, double minY, double maxY, double? minY2, double? maxY2})? _zoom;
+  // minY/maxY apply to the left axis, minY2/maxY2 to the right axis when the
+  // chart is dual-axis. A null Y pair shows that axis's full range.
+  ({double minX, double maxX, double? minY, double? maxY, double? minY2, double? maxY2})? _zoom;
 
   // Transient drag state for the marquee selection box.
   Offset? _dragStart;
@@ -88,28 +88,41 @@ class _MultiStatisticLineChartState extends State<MultiStatisticLineChart> {
   @override
   void didUpdateWidget(MultiStatisticLineChart old) {
     super.didUpdateWidget(old);
-    // The series lists are rebuilt every parent build, so compare a stable
-    // projection: series names + each series' points identity. Reset the zoom
-    // when the selection or underlying data changes.
-    if (_seriesChanged(old.primarySeries, widget.primarySeries) ||
-        _seriesChanged(old.secondarySeries, widget.secondarySeries)) {
-      _zoom = null;
+    final zoom = _zoom;
+    if (zoom == null) {
+      return;
     }
+    // Adding, removing or moving series keeps the time window. Each Y window
+    // carries over only while its axis still plots the same side: the left
+    // axis shows the secondary series when there are no primary ones.
+    final oldLayout = _axisLayout(old);
+    final newLayout = _axisLayout(widget);
+    if (newLayout.isEmpty) {
+      // Nothing left to zoom into; the next series starts at full range.
+      _zoom = null;
+      return;
+    }
+    final keepLeftY = oldLayout.leftIsPrimary == newLayout.leftIsPrimary;
+    final keepRightY = oldLayout.isDual && newLayout.isDual;
+    _zoom = (
+      minX: zoom.minX,
+      maxX: zoom.maxX,
+      minY: keepLeftY ? zoom.minY : null,
+      maxY: keepLeftY ? zoom.maxY : null,
+      minY2: keepRightY ? zoom.minY2 : null,
+      maxY2: keepRightY ? zoom.maxY2 : null,
+    );
   }
 
-  bool _seriesChanged(
-    List<ChartSeries> a,
-    List<ChartSeries> b,
-  ) {
-    if (a.length != b.length) {
-      return true;
-    }
-    for (var i = 0; i < a.length; i++) {
-      if (a[i].name != b[i].name || !identical(a[i].points, b[i].points) || a[i].points.length != b[i].points.length) {
-        return true;
-      }
-    }
-    return false;
+  // Mirrors the axis choice made in [build].
+  ({bool isEmpty, bool leftIsPrimary, bool isDual}) _axisLayout(MultiStatisticLineChart chart) {
+    final hasPrimary = chart.primarySeries.any((s) => s.points.length >= 2);
+    final hasSecondary = chart.secondarySeries.any((s) => s.points.length >= 2);
+    return (
+      isEmpty: !hasPrimary && !hasSecondary,
+      leftIsPrimary: hasPrimary,
+      isDual: hasPrimary && hasSecondary,
+    );
   }
 
   // Builds the cached sorted-timestamp arrays (ms), one List<double> per series
