@@ -104,6 +104,72 @@ ENDHEADER
   });
 
   test(
+    'parses an older file: fewer header fields, unknown statistics',
+    () async {
+      // STATMON "2" lines have no CacheSerialNum, write -1 as an unsigned 32-bit
+      // number, and can name statistics with no definition. The last line was
+      // cut short as statmonitor stopped.
+      const v2 = '''
+STATMON "2"
+Time = "Tue 30 Sep 1997 17:36:09 PDT"
+StatTypes = [
+Shrpc ( StatTypeNum Time ProcessName ProcessId SessionId DataPageReads sessionStat0 BitmapPageReads ) 1
+]
+ENDHEADER
+1 875666169 ShrPcMonitor 47984 4294967295 10 99 1
+1 875666170 ShrPcMonitor 47984 4294967295 12 99 2
+1 875666171 ShrPcMonitor 47984 42949
+''';
+      final dm = DataManager();
+      await dm.loadFromBytes(Uint8List.fromList(utf8.encode(v2)));
+
+      final process = dm.allProcesses.single;
+      expect(process.processId, 47984);
+      expect(process.sessionId, isNull);
+      expect(process.samples, 2);
+      expect(process.statisticData.keys, ['DataPageReads', 'BitmapPageReads']);
+      expect(
+        process.statisticData['DataPageReads']!.points.map((p) => p.value),
+        [10, 12],
+      );
+      expect(
+        process.statisticData['BitmapPageReads']!.points.map((p) => p.value),
+        [1, 2],
+      );
+    },
+  );
+
+  test('a last line cut short anywhere is skipped', () async {
+    // Type 2 has no statistics, so its lines are only the leading fields.
+    const header = '''
+STATMON "4"
+StatTypes = [
+Shrpc  ( StatTypeNum Time ProcessName ProcessId SessionId CacheSerialNum DataPageReads ) 1 ,
+AppStat  ( StatTypeNum Time ProcessName ProcessId SessionId ) 2
+]
+ENDHEADER
+1 1771546154 ShrPcMonitor 18322 -1 0 10
+2 1771546154 app 7 3
+''';
+    for (final last in [
+      '1 1771546155 ShrPcMonitor 18322 -1 0 12',
+      '2 1771546155 app 7 3',
+    ]) {
+      // Cut after each whole field, short of the complete line.
+      final fields = last.split(' ');
+      for (var n = 1; n < fields.length; n++) {
+        final cut = fields.take(n).join(' ');
+        final dm = DataManager();
+        await dm.loadFromBytes(Uint8List.fromList(utf8.encode('$header$cut')));
+        expect(dm.allProcesses.map((p) => p.samples), [
+          1,
+          1,
+        ], reason: 'last line "$cut"');
+      }
+    }
+  });
+
+  test(
     'loadFromStream gives up early on a large file with no header',
     () async {
       // 64 MB of lines that never reach ENDHEADER.

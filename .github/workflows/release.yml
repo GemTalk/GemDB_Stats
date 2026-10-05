@@ -1,6 +1,7 @@
 name: release
 
-# Publishes a GitHub release with the macOS, Windows and Linux apps. Run it from
+# Publishes a GitHub release with the macOS, Windows and Linux apps and the web
+# build GemDB Code embeds (docs/embedding.md). Run it from
 # the Actions tab on main and enter the new version: it sets that version in
 # app/pubspec.yaml, commits to main, tags the commit, builds the ticked
 # platforms from the tag with build.yml, and attaches them to a release. A
@@ -28,6 +29,10 @@ on:
         description: macOS
         type: boolean
         default: true
+      web:
+        description: Web
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -52,7 +57,7 @@ jobs:
       - id: vars
         env:
           INPUT_VERSION: ${{ inputs.version }}
-          ANY_PLATFORM: ${{ inputs.linux || inputs.windows || inputs.macos }}
+          ANY_PLATFORM: ${{ inputs.linux || inputs.windows || inputs.macos || inputs.web }}
         run: |
           if [[ "$GITHUB_REF" != refs/heads/main ]]; then
             echo "::error::Run releases from main, not $GITHUB_REF_NAME"
@@ -117,6 +122,7 @@ jobs:
       linux: ${{ inputs.linux }}
       windows: ${{ inputs.windows }}
       macos: ${{ inputs.macos }}
+      web: ${{ inputs.web }}
       ref: ${{ needs.version.outputs.tag }}
 
   publish:
@@ -158,6 +164,13 @@ jobs:
 
           for dir in artifacts/*-macos; do
             mv "$dir/GemDB-Stats.zip" "dist/$name-macos.zip"
+          done
+
+          # One top-level folder, as for Linux.
+          for dir in artifacts/*-web; do
+            mv "$dir" "artifacts/$name-web"
+            tar -czf "dist/$name-web.tar.gz" -C artifacts "$name-web"
+            rm -rf "artifacts/$name-web"
           done
 
           cd dist

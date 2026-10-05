@@ -67,6 +67,11 @@ Grab the latest build for your platform from the
 | Windows | Unzip and run `GemDBStats.exe`. Keep the `data/` folder and DLLs next to it. |
 | Linux | Extract the bundle and run `./gemdb-stats`. Needs a GTK 3 runtime (`libgtk-3-0`). |
 
+Or use it in your browser at
+[gemtalk.github.io/GemDB_Stats](https://gemtalk.github.io/GemDB_Stats/), with
+no install. The web version has everything but the AI assistant, and your file
+never leaves your machine.
+
 ### Open a statmon file
 
 Click **No file selected** in the top bar and pick a `.out` or `.out.gz`
@@ -130,6 +135,11 @@ claude mcp add vsd -- dart run /absolute/path/to/GemDB_Stats/mcp/bin/vsd_mcp.dar
 Optionally pass a statmon file path as a final argument to load it at startup;
 otherwise ask the model to call `load_file`. The full tool list and details are
 in [mcp/README.md](mcp/README.md).
+
+## Embedding
+
+The web build can run inside another page, such as a VS Code webview, with the
+host page choosing the file to show. See [docs/embedding.md](docs/embedding.md).
 
 ## Development notes
 

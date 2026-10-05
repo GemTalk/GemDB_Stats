@@ -84,12 +84,13 @@ jobs:
           dart test -p chrome
           dart test -p chrome -c dart2wasm
 
-      # The picker-to-parser handoff, run where the picker returns bytes.
+      # Opening a file the way the web does it: picked as a stream, or sent
+      # by a host page such as a VS Code webview.
       - name: test opening a file in Chrome
         working-directory: app
         run: |
           flutter pub get
-          flutter test --platform chrome test/file_open_test.dart
+          flutter test --platform chrome test/file_open_test.dart test/embed_test.dart
 
       - name: build app for the web
         working-directory: app
