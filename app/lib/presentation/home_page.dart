@@ -12,9 +12,12 @@ import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
 import 'package:vsd/presentation/chart/series_legend.dart';
 import 'package:vsd/presentation/chart/statistic_line_chart.dart';
 import 'package:vsd/presentation/file_bar.dart';
+import 'package:vsd/presentation/menu/app_menu.dart';
+import 'package:vsd/presentation/menu/app_menu_button.dart';
+import 'package:vsd/presentation/menu/app_menus.dart';
+import 'package:vsd/presentation/menu/platform_menu_renderer.dart';
 import 'package:vsd/presentation/process_table.dart';
 import 'package:vsd/presentation/statistics_table/statistics_table.dart';
-import 'package:vsd/presentation/time_zone/time_zone_menu.dart';
 import 'package:vsd/theme.dart';
 import 'package:vsd_core/vsd_core.dart';
 
@@ -49,75 +52,45 @@ class _HomePageState extends State<HomePage> {
   late MultiSplitViewController _chartPaneController;
   bool _legendOpen = false;
 
-  // Menus are rebuilt on every setState, but the platform menu is expensive to
-  // serialize. Cache the built menu and only refresh it when the visible items
-  // actually change.
+  // Menus are rebuilt on every setState — including ~100 times per file load,
+  // one per progress tick — but neither rendering is cheap: the platform menu
+  // is serialized over a channel, and an open widget menu is a ~400-item
+  // subtree. Cache both, and refresh only when the visible items change.
   ({bool showYearAndZone, DisplayZone zone, int dataVersion})? _menuCacheKey;
-  List<PlatformMenu>? _menuCache;
+  List<AppSubmenu>? _menuModel;
+  List<PlatformMenuItem>? _platformMenus;
+  Widget? _menuButton;
 
-  List<PlatformMenu> get platformMenus {
+  List<AppSubmenu> get _menus {
     final key = (showYearAndZone: _showYearAndZone, zone: _zone, dataVersion: _dataVersion);
     if (_menuCacheKey != key) {
       _menuCacheKey = key;
-      _menuCache = _buildPlatformMenus();
+      _menuModel = buildAppMenus(
+        showYearAndZone: _showYearAndZone,
+        zone: _zone,
+        onToggleYearAndZone: () => setState(() => _showYearAndZone = !_showYearAndZone),
+        onSelectZone: _setZone,
+      );
+      _platformMenus = null;
+      _menuButton = null;
     }
-    return _menuCache!;
+    return _menuModel!;
   }
 
-  List<PlatformMenu> _buildPlatformMenus() => [
-    PlatformMenu(
-      label: 'GemDB Stats',
-      menus: [
-        PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
-        PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.servicesSubmenu),
-          ],
-        ),
-        PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hide),
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hideOtherApplications),
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.showAllApplications),
-          ],
-        ),
-        PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
-          ],
-        ),
-      ],
-    ),
-    PlatformMenu(
-      label: 'View',
-      menus: [
-        PlatformMenuItem(
-          label: _showYearAndZone ? '✓ Show Year & Time Zone' : 'Show Year & Time Zone',
-          onSelected: () => setState(() => _showYearAndZone = !_showYearAndZone),
-        ),
-        PlatformMenuItemGroup(
-          members: [
-            PlatformMenu(
-              label: 'Time Zone',
-              menus: buildTimeZoneMenuItems(current: _zone, onSelect: _setZone),
-            ),
-          ],
-        ),
-      ],
-    ),
-    PlatformMenu(
-      label: 'Window',
-      menus: [
-        PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.minimizeWindow),
-        PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.zoomWindow),
-        PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.arrangeWindowsInFront),
-          ],
-        ),
-      ],
-    ),
-  ];
+  /// PlatformMenuBar compares descendants by identity, so reusing the list is
+  /// what keeps 400+ zone items off the platform channel.
+  List<PlatformMenuItem> get platformMenus {
+    // Read _menus first: it is what invalidates the rendering below.
+    final menus = _menus;
+    return _platformMenus ??= platformMenusFrom(menus);
+  }
+
+  /// Reusing the instance lets Element.updateChild skip the whole menu subtree
+  /// on an unrelated rebuild.
+  Widget get menuButton {
+    final menus = _menus;
+    return _menuButton ??= AppMenuButton(menus: menus);
+  }
 
   @override
   void initState() {
@@ -276,48 +249,52 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return PlatformMenuBar(
-      menus: platformMenus,
-      child: Scaffold(
-        body: Column(
-          children: [
-            FileBar(
-              fileName: _fileName,
-              onTap: _chooseFile,
-              // The AI assistant is left out of the web build for now: a
-              // browser would need a CORS opt-in and would hold the API key.
-              trailing: kIsWeb
-                  ? null
-                  : ToolIconButton(
-                      icon: FontAwesomeIcons.message,
-                      tooltip: 'Toggle Chat',
-                      onTap: _toggleAiPanel,
-                    ),
-            ),
-            if (_loading)
-              progressIndicator()
-            else if (_loadError != null)
-              Expanded(
-                child: Center(
-                  child: Text(
-                    'Error loading file: $_loadError',
-                    style: const TextStyle(color: Colors.red),
+    // Exactly one of the two: PlatformMenuBar installs its menus on mount and
+    // allows only one delegate, and it renders nothing off macOS anyway.
+    final nativeMenus = usesPlatformMenuBar;
+
+    final scaffold = Scaffold(
+      body: Column(
+        children: [
+          FileBar(
+            fileName: _fileName,
+            onTap: _chooseFile,
+            leading: nativeMenus ? null : menuButton,
+            // The AI assistant is left out of the web build for now: a
+            // browser would need a CORS opt-in and would hold the API key.
+            trailing: kIsWeb
+                ? null
+                : ToolIconButton(
+                    icon: FontAwesomeIcons.message,
+                    tooltip: 'Toggle Chat',
+                    onTap: _toggleAiPanel,
                   ),
-                ),
-              )
-            else
-              Expanded(
-                child: multiSplitViewTheme(
-                  child: MultiSplitView(
-                    axis: Axis.horizontal,
-                    controller: _mainController,
-                  ),
+          ),
+          if (_loading)
+            progressIndicator()
+          else if (_loadError != null)
+            Expanded(
+              child: Center(
+                child: Text(
+                  'Error loading file: $_loadError',
+                  style: const TextStyle(color: Colors.red),
                 ),
               ),
-          ],
-        ),
+            )
+          else
+            Expanded(
+              child: multiSplitViewTheme(
+                child: MultiSplitView(
+                  axis: Axis.horizontal,
+                  controller: _mainController,
+                ),
+              ),
+            ),
+        ],
       ),
     );
+
+    return nativeMenus ? PlatformMenuBar(menus: platformMenus, child: scaffold) : scaffold;
   }
 
   Widget progressIndicator() {

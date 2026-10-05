@@ -24,6 +24,7 @@ class MainApp extends StatelessWidget {
     return ShadTheme(
       data: ShadThemeData(),
       child: MaterialApp(
+        title: 'GemDB Stats',
         debugShowCheckedModeBanner: false,
         theme: theme,
         home: HomePage(),
