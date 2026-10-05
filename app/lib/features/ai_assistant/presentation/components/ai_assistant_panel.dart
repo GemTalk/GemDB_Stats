@@ -1,19 +1,26 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:vsd/features/ai_assistant/domain/ai_backend.dart';
 import 'package:vsd/features/ai_assistant/domain/ai_service.dart';
+import 'package:vsd/features/ai_assistant/domain/aws/aws_sso_config.dart';
+import 'package:vsd/features/ai_assistant/domain/aws/aws_sso_session.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_message.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_stream_events.dart';
-import 'package:vsd/features/ai_assistant/presentation/components/ai_key_setup_view.dart';
 import 'package:vsd/features/ai_assistant/presentation/components/ai_messages_body.dart';
+import 'package:vsd/features/ai_assistant/presentation/components/ai_setup_view.dart';
 import 'package:vsd/features/ai_assistant/presentation/components/input_box.dart';
 import 'package:vsd/features/ai_assistant/presentation/utils/replay_stream_controller.dart';
 import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd_mcp/vsd_mcp.dart';
 
 const _kApiKeyPref = 'anthropic_api_key';
+const _kConfigPref = 'aws_sso_config';
+const _kAuthModePref = 'ai_auth_mode';
 
 class AiAssistantPanel extends StatefulWidget {
   const AiAssistantPanel({required this.onClose, super.key});
@@ -28,13 +35,18 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
   // ------- Services -------
   VsdMcpServer? _mcpServer;
   AiService? _aiService;
+  AwsSsoSession? _session;
   bool _servicesReady = false;
   String? _initError;
 
-  // ------- Key setup -------
-  bool _keySetupMode = false;
-  String? _keySetupErrorHint;
+  // ------- Setup -------
+  AiAuthMode _mode = AiAuthMode.bedrock;
+  AwsSsoConfig? _config;
   bool _hasStoredKey = false;
+  bool _setupMode = false;
+  bool _signInBusy = false;
+  AwsSsoDeviceAuthorization? _pendingAuth;
+  String? _setupErrorHint;
 
   // ------- Conversation state -------
   final List<AiMessage> _messages = [];
@@ -52,65 +64,198 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
 
   Future<void> _initServices() async {
     final prefs = await SharedPreferences.getInstance();
-    final key = prefs.getString(_kApiKeyPref) ?? '';
-    _hasStoredKey = key.trim().isNotEmpty;
 
-    if (key.trim().isEmpty) {
+    _config = _readConfig(prefs);
+    final storedKey = prefs.getString(_kApiKeyPref)?.trim() ?? '';
+    _hasStoredKey = storedKey.isNotEmpty;
+
+    // With no explicit choice recorded, follow whichever provider is already
+    // configured, so existing API-key users are not pushed into AWS sign-in.
+    final storedMode = prefs.getString(_kAuthModePref);
+    _mode = storedMode != null
+        ? AiAuthMode.fromName(storedMode)
+        : (_hasStoredKey ? AiAuthMode.anthropicApiKey : AiAuthMode.bedrock);
+
+    final backend = await _restoreBackend(storedKey);
+    if (backend == null) {
       if (mounted) {
-        setState(() => _keySetupMode = true);
+        setState(() => _setupMode = true);
       }
       return;
     }
 
+    await _startServices(backend);
+  }
+
+  /// Rebuilds the configured backend from stored settings, or null when the
+  /// user still has to set something up or sign in.
+  Future<AiBackend?> _restoreBackend(String storedKey) async {
+    switch (_mode) {
+      case AiAuthMode.anthropicApiKey:
+        if (storedKey.isEmpty) {
+          return null;
+        }
+        return AnthropicApiKeyBackend(apiKey: storedKey);
+
+      case AiAuthMode.bedrock:
+        final config = _config;
+        if (config == null || !config.isComplete) {
+          return null;
+        }
+        final session = AwsSsoSession(config: config);
+        _session?.dispose();
+        _session = session;
+        // A stored access token survives restarts, so this usually skips
+        // sign-in entirely.
+        if (!await session.hasValidToken()) {
+          return null;
+        }
+        return BedrockAiBackend(config: config, session: session);
+    }
+  }
+
+  Future<void> _startServices(AiBackend backend) async {
     try {
       final mcpServer = await VsdMcpServer.create();
-      final aiService = AiService(mcpServer, key);
+      final aiService = AiService(mcpServer, backend);
 
       if (mounted) {
         setState(() {
           _mcpServer = mcpServer;
           _aiService = aiService;
           _servicesReady = true;
-          _keySetupMode = false;
+          _setupMode = false;
+          _setupErrorHint = null;
           _initError = null;
         });
       } else {
         aiService.dispose();
         unawaited(mcpServer.dispose());
       }
-    } on StateError {
+    } catch (e) {
+      // Ownership only transfers once AiService is built, so release it here.
+      backend.dispose();
       if (mounted) {
         setState(() {
-          _keySetupMode = true;
-          _keySetupErrorHint = 'Could not initialize with this key. Please try again.';
+          _initError = e.toString();
+          // Surfaced twice: when this runs straight after setup the setup view
+          // is still on screen, and it shows this hint instead of _initError.
+          _setupErrorHint = e.toString();
         });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _initError = e.toString());
       }
     }
   }
 
-  Future<void> _saveApiKey(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kApiKeyPref, key);
-    _hasStoredKey = true;
-
+  void _teardownServices() {
+    // Disposing AiService also disposes the backend it owns.
     _aiService?.dispose();
     unawaited(_mcpServer?.dispose());
+    _aiService = null;
+    _mcpServer = null;
+    _servicesReady = false;
+  }
 
+  // ------- Provider selection -------
+
+  Future<void> _changeMode(AiAuthMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kAuthModePref, mode.name);
     if (mounted) {
       setState(() {
-        _keySetupMode = false;
-        _keySetupErrorHint = null;
-        _servicesReady = false;
-        _initError = null;
-        _aiService = null;
-        _mcpServer = null;
+        _mode = mode;
+        _setupErrorHint = null;
+        _pendingAuth = null;
+        _signInBusy = false;
       });
-      unawaited(_initServices());
     }
+  }
+
+  Future<void> _saveApiKey(String key) async {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) {
+      // The form disables Save while empty, so this is only a backstop.
+      if (mounted) {
+        setState(() {
+          _setupMode = true;
+          _setupErrorHint = 'Could not initialize with this key. Please try again.';
+        });
+      }
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kApiKeyPref, trimmed);
+    await prefs.setString(_kAuthModePref, AiAuthMode.anthropicApiKey.name);
+    _hasStoredKey = true;
+    _mode = AiAuthMode.anthropicApiKey;
+
+    _teardownServices();
+    await _startServices(AnthropicApiKeyBackend(apiKey: trimmed));
+  }
+
+  /// Saves [config], then runs the device-authorization flow end to end.
+  Future<void> _signIn(AwsSsoConfig config) async {
+    setState(() {
+      _signInBusy = true;
+      _setupErrorHint = null;
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kConfigPref, jsonEncode(config.toJson()));
+    await prefs.setString(_kAuthModePref, AiAuthMode.bedrock.name);
+    _config = config;
+    _mode = AiAuthMode.bedrock;
+
+    _teardownServices();
+    _session?.dispose();
+    final session = AwsSsoSession(config: config);
+    _session = session;
+
+    try {
+      final auth = await session.beginLogin();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pendingAuth = auth;
+        _signInBusy = false;
+      });
+
+      await _openVerificationUri(auth);
+      await session.waitForApproval(auth);
+
+      if (!mounted) {
+        return;
+      }
+      setState(() => _pendingAuth = null);
+      await _startServices(BedrockAiBackend(config: config, session: session));
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _pendingAuth = null;
+          _signInBusy = false;
+          _setupErrorHint = e.toString();
+        });
+      }
+    }
+  }
+
+  Future<void> _openVerificationUri(AwsSsoDeviceAuthorization auth) async {
+    final target = auth.verificationUriComplete.isNotEmpty ? auth.verificationUriComplete : auth.verificationUri;
+    final uri = Uri.tryParse(target);
+    if (uri == null) {
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  AwsSsoConfig? _readConfig(SharedPreferences prefs) {
+    final raw = prefs.getString(_kConfigPref);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    final decoded = jsonDecode(raw);
+    return decoded is Map<String, dynamic> ? AwsSsoConfig.fromJson(decoded) : null;
   }
 
   @override
@@ -118,6 +263,7 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
     unawaited(_activeSub?.cancel());
     _aiService?.dispose();
     unawaited(_mcpServer?.dispose());
+    _session?.dispose();
     super.dispose();
   }
 
@@ -191,8 +337,8 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
                   _finishStreaming(errorText: message);
                   if (mounted) {
                     setState(() {
-                      _keySetupMode = true;
-                      _keySetupErrorHint = 'Invalid or unauthorized key.';
+                      _setupMode = true;
+                      _setupErrorHint = message;
                       _servicesReady = false;
                     });
                   }
@@ -270,12 +416,21 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
           _header(),
           const Divider(height: 1),
           Expanded(
-            child: _keySetupMode
-                ? AiKeySetupView(
-                    onSave: _saveApiKey,
+            child: _setupMode
+                ? AiSetupView(
+                    mode: _mode,
+                    onModeChanged: (mode) => unawaited(_changeMode(mode)),
+                    onSaveApiKey: (key) => unawaited(_saveApiKey(key)),
+                    onSignIn: (config) => unawaited(_signIn(config)),
+                    initialSsoConfig: _config,
                     hasExistingKey: _hasStoredKey,
-                    onCancel: _servicesReady ? () => setState(() => _keySetupMode = false) : null,
-                    errorHint: _keySetupErrorHint,
+                    pendingAuth: _pendingAuth,
+                    busy: _signInBusy,
+                    onOpenVerificationUri: _pendingAuth == null
+                        ? null
+                        : () => unawaited(_openVerificationUri(_pendingAuth!)),
+                    onCancel: _servicesReady ? () => setState(() => _setupMode = false) : null,
+                    errorHint: _setupErrorHint,
                   )
                 : AiMessagesBody(
                     messages: _messages,
@@ -283,7 +438,7 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
                     initializationError: _initError,
                   ),
           ),
-          if (!_keySetupMode) ...[
+          if (!_setupMode) ...[
             InputBox(onSend: _sendMessage, ready: _servicesReady, isSending: _isSending),
           ],
         ],
@@ -304,10 +459,10 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
           if (_isSending) ToolIconButton(icon: FontAwesomeIcons.stop, tooltip: 'Stop', onTap: _stopStreaming),
           ToolIconButton(
             icon: FontAwesomeIcons.key,
-            tooltip: 'Set API key',
+            tooltip: 'AI provider settings',
             onTap: () => setState(() {
-              _keySetupMode = true;
-              _keySetupErrorHint = null;
+              _setupMode = true;
+              _setupErrorHint = null;
             }),
           ),
           ToolIconButton(icon: FontAwesomeIcons.xmark, tooltip: 'Close', onTap: widget.onClose),

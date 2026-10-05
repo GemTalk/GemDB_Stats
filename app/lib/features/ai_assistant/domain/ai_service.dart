@@ -1,5 +1,7 @@
 import 'package:anthropic_sdk_dart/anthropic_sdk_dart.dart' as anthropic;
 import 'package:mcp_dart/mcp_dart.dart' as mcp;
+import 'package:vsd/features/ai_assistant/domain/ai_backend.dart';
+import 'package:vsd/features/ai_assistant/domain/aws/aws_sso_session.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_message.dart';
 import 'package:vsd/features/ai_assistant/domain/models/ai_stream_events.dart';
 import 'package:vsd_core/vsd_core.dart';
@@ -8,26 +10,26 @@ import 'package:vsd_mcp/vsd_mcp.dart';
 /// Drives the agentic loop between the user, Claude, and the [VsdMcpServer].
 ///
 /// ## Lifecycle
-/// 1. Construct with a pre-initialized [VsdMcpServer] — throws [StateError]
-///    if the API key is missing or unconfigured.
+/// 1. Construct with a pre-initialized [VsdMcpServer] and an [AiBackend] that
+///    supplies the provider and its credentials. Ownership of the backend
+///    transfers here; [dispose] releases it.
 /// 2. Call [chat] for each user turn; subscribe to the returned stream.
 /// 3. Call [dispose] when done.
 class AiService {
-  AiService(this._mcpServer, String apiKey) {
-    if (apiKey.trim().isEmpty) {
-      throw StateError('API key is empty.');
-    }
-    _client = anthropic.AnthropicClient(
-      config: anthropic.AnthropicConfig(
-        authProvider: anthropic.ApiKeyProvider(apiKey.trim()),
-      ),
-    );
-  }
+  AiService(this._mcpServer, AiBackend backend)
+    : _backend = backend,
+      _model = backend.modelId,
+      _client = backend.createClient();
 
   final VsdMcpServer _mcpServer;
-  late final anthropic.AnthropicClient _client;
+  final AiBackend _backend;
 
-  static const _model = 'claude-sonnet-4-6';
+  /// Model ID in the backend's dialect, e.g. `eu.anthropic.claude-sonnet-5-5`
+  /// on Bedrock or `claude-sonnet-5-5` on the Anthropic API.
+  final String _model;
+
+  final anthropic.AnthropicClient _client;
+
   static const _maxTokens = 4096;
   static const _maxIterations = 10;
 
@@ -38,6 +40,7 @@ class AiService {
 
   void dispose() {
     _client.close();
+    _backend.dispose();
   }
 
   /// Sends [userMessage] to Claude and streams back [AiStreamEvent]s.
@@ -138,7 +141,11 @@ class AiService {
             anthropic.InputMessage(
               role: anthropic.MessageRole.assistant,
               content: anthropic.MessageContent.blocks(
-                message.content.map(_contentBlockToInput).toList(),
+                message.content
+                    // An empty text block is rejected on the way back in.
+                    .where((b) => b is! anthropic.TextBlock || b.text.isNotEmpty)
+                    .map(_contentBlockToInput)
+                    .toList(),
               ),
             ),
           );
@@ -160,11 +167,12 @@ class AiService {
 
       // Exceeded max iterations.
       yield const AiDone();
+    } on AwsSsoLoginRequired catch (e) {
+      yield AiError(e.message, isAuthError: true);
+    } on AwsSsoException catch (e) {
+      yield AiError(e.message);
     } on anthropic.AuthenticationException {
-      yield const AiError(
-        'Invalid or unauthorized API key.',
-        isAuthError: true,
-      );
+      yield AiError(_backend.authErrorMessage, isAuthError: true);
     } on anthropic.RateLimitException {
       yield const AiError(
         'Rate limit reached. Please wait a moment and try again.',
@@ -192,6 +200,12 @@ class AiService {
 
   /// Converts a response [anthropic.ContentBlock] to an
   /// [anthropic.InputContentBlock] for multi-turn message reconstruction.
+  ///
+  /// Blocks with no typed input variant — notably `thinking`, which current
+  /// models emit by default — are round-tripped through their own JSON so they
+  /// replay byte-for-byte. They must not be dropped or replaced with an empty
+  /// text block: the API rejects empty text, and discarding a thinking block
+  /// breaks the signature the model expects to see again on the next turn.
   anthropic.InputContentBlock _contentBlockToInput(
     anthropic.ContentBlock block,
   ) {
@@ -202,9 +216,7 @@ class AiService {
         name: name,
         input: input,
       ),
-      _ =>
-        // Silently discard unknown blocks (thinking, citations, etc.).
-        anthropic.InputContentBlock.text(''),
+      _ => anthropic.InputContentBlock.fromJson(block.toJson()),
     };
   }
 
