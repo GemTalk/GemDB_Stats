@@ -43,7 +43,8 @@ class AppMenuButton extends StatefulWidget {
 class _Level {
   _Level(this.entries, this.anchor);
 
-  final List<AppMenuEntry> entries;
+  /// Replaced in place when the menus change while open; see [_refresh].
+  List<AppMenuEntry> entries;
 
   /// What the panel is placed against: the button for the root menu, the
   /// parent row for a submenu.
@@ -90,6 +91,14 @@ class _AppMenuButtonState extends State<AppMenuButton> with WidgetsBindingObserv
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(AppMenuButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_open && !identical(oldWidget.menus, widget.menus)) {
+      _refresh();
+    }
+  }
+
   /// VS Code closes its menus on resize rather than chase their anchors.
   @override
   void didChangeMetrics() => _close();
@@ -101,14 +110,16 @@ class _AppMenuButtonState extends State<AppMenuButton> with WidgetsBindingObserv
 
   RenderObject _overlayBox() => Overlay.of(context).context.findRenderObject()!;
 
+  /// The hamburger's own items: every menu's, set apart by separators.
+  List<AppMenuEntry> _rootEntries() => [
+    for (final (index, menu) in widget.menus.indexed) ...[
+      if (index > 0) const AppMenuDivider(),
+      ...menu.entries,
+    ],
+  ];
+
   void _show({required bool keyboard}) {
-    final entries = [
-      for (final (index, menu) in widget.menus.indexed) ...[
-        if (index > 0) const AppMenuDivider(),
-        ...menu.entries,
-      ],
-    ];
-    final root = _Level(entries, _buttonRect());
+    final root = _Level(_rootEntries(), _buttonRect());
     // Opened from the keyboard, the menu lands on its first item.
     if (keyboard) {
       root
@@ -122,6 +133,35 @@ class _AppMenuButtonState extends State<AppMenuButton> with WidgetsBindingObserv
         _menuFocus.requestFocus();
       }
     });
+  }
+
+  /// Brings an open cascade up to date with new menus — a file load changes
+  /// the File zone's label — by following its open submenus through them.
+  /// A level whose rows no longer line up starts over, without submenus.
+  ///
+  /// Called from [didUpdateWidget], ahead of a build, so no setState.
+  void _refresh() {
+    _cancelShow();
+    _hideTimer?.cancel();
+    List<AppMenuEntry>? entries = _rootEntries();
+    for (var depth = 0; depth < _levels.length && entries != null; depth++) {
+      final level = _levels[depth];
+      if (entries.length != level.entries.length) {
+        level
+          ..focused = null
+          ..expanded = null;
+      }
+      level.entries = entries;
+      final expanded = level.expanded;
+      final next = expanded == null ? null : entries[expanded];
+      if (next is AppSubmenu) {
+        entries = next.entries;
+      } else {
+        _levels.removeRange(depth + 1, _levels.length);
+        level.expanded = null;
+        entries = null;
+      }
+    }
   }
 
   void _close({bool refocusButton = false}) {
@@ -258,6 +298,8 @@ class _AppMenuButtonState extends State<AppMenuButton> with WidgetsBindingObserv
     final focused = level.focused;
 
     void move(int? index) {
+      // The keyboard outranks a submenu the pointer was about to open.
+      _cancelShow();
       if (index != null) {
         _focus(depth, index, keyboard: true);
       }

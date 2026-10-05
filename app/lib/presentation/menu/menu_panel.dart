@@ -134,6 +134,9 @@ class MenuPanelState extends State<MenuPanel> with SingleTickerProviderStateMixi
   @override
   void didUpdateWidget(MenuPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(widget.entries, oldWidget.entries)) {
+      _width = _naturalWidth(MediaQuery.textScalerOf(context));
+    }
     final focused = widget.focused;
     if (widget.reveal && focused != null && focused != oldWidget.focused) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reveal(focused));

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vsd/presentation/home_page.dart';
+import 'package:vsd/presentation/menu/app_menu.dart';
 import 'package:vsd/presentation/menu/app_menu_button.dart';
 import 'package:vsd/theme.dart';
 import 'package:vsd_core/vsd_core.dart';
@@ -145,6 +146,24 @@ void main() {
     expect(find.text('UTC'), findsOneWidget);
   }, variant: desktop);
 
+  testWidgets('a keyboard move cancels a submenu the pointer was opening', (tester) async {
+    await pumpHomePage(tester);
+    await openMenu(tester);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(find.byType(AppMenuButton)));
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.text('Time Zone')));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Up to Show Year & Time Zone, inside Time Zone's hover delay.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.text('UTC'), findsNothing);
+  }, variant: desktop);
+
   testWidgets('the keyboard walks the cascade', (tester) async {
     await pumpHomePage(tester);
     await openMenu(tester);
@@ -188,7 +207,51 @@ void main() {
     expect(find.text('Time Zone'), findsNothing);
     expect(find.text('UTC'), findsNothing);
   }, variant: desktop);
+
+  testWidgets('an open menu takes up new menus in place', (tester) async {
+    final menus = ValueNotifier(_zoneMenus('old'));
+    addTearDown(menus.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: ValueListenableBuilder(
+              valueListenable: menus,
+              builder: (context, value, _) => AppMenuButton(menus: value),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(AppMenuButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Zone'));
+    await tester.pumpAndSettle();
+    expect(find.text('File (old)'), findsOneWidget);
+
+    // As when a file finishes loading under the open menu.
+    menus.value = _zoneMenus('new');
+    await tester.pumpAndSettle();
+
+    expect(find.text('File (old)'), findsNothing);
+    expect(find.text('File (new)'), findsOneWidget);
+  });
 }
+
+/// One menu with a submenu whose label carries [offset], standing in for the
+/// File zone's label that changes with each loaded file.
+List<AppSubmenu> _zoneMenus(String offset) => [
+  AppSubmenu(
+    label: 'View',
+    entries: [
+      AppSubmenu(
+        label: 'Zone',
+        entries: [AppMenuItem(label: 'File ($offset)', onSelected: () {})],
+      ),
+    ],
+  ),
+];
 
 /// Whether the open menu row holding [label] carries a checkmark.
 bool checkedRow(WidgetTester tester, Finder label) => tester
