@@ -253,6 +253,16 @@ class DataManager {
     }
   }
 
+  /// The fields that start each data line, before its statistics.
+  static const _headerFields = {
+    'StatTypeNum',
+    'Time',
+    'ProcessName',
+    'ProcessId',
+    'SessionId',
+    'CacheSerialNum',
+  };
+
   static Map<int, StatType> parseStatTypes(
     String content,
     Map<String, Statistic> statistics,
@@ -279,12 +289,17 @@ class DataManager {
               .where((s) => s.isNotEmpty)
               .toList();
 
-          // Look up Statistic objects by name, skipping the first 6 header fields
-          // (StatTypeNum, Time, ProcessName, ProcessId, SessionId, CacheSerialNum)
+          // Look up Statistic objects by name, noting the column each one is
+          // in. Skip the header fields, of which older files have fewer (no
+          // CacheSerialNum), and statistics with no definition.
           final stats = <Statistic>[];
-          for (final statName in statNames.skip(6)) {
-            if (statistics.containsKey(statName)) {
-              stats.add(statistics[statName]!);
+          final columns = <int>[];
+          for (var column = 0; column < statNames.length; column++) {
+            final statistic = statistics[statNames[column]];
+            if (statistic != null &&
+                !_headerFields.contains(statNames[column])) {
+              stats.add(statistic);
+              columns.add(column);
             }
           }
 
@@ -292,6 +307,7 @@ class DataManager {
             id: id,
             name: typeMatch.group(1)!,
             statistics: stats,
+            columns: columns,
           );
         }
       }
@@ -434,9 +450,17 @@ class _StatmonParser {
 
     final processName = parts[2];
     final statTypeId = int.parse(parts[0]);
-    // Session ID and Process ID are null if they're not positive
-    final processId = int.parse(parts[3]) > 0 ? int.parse(parts[3]) : null;
-    final sessionId = int.parse(parts[4]) > 0 ? int.parse(parts[4]) : null;
+    final type = statTypes[statTypeId];
+    // Skip a line of an undeclared type, or one cut short, such as a last line
+    // written as statmonitor stopped.
+    if (type == null ||
+        (type.columns.isNotEmpty && parts.length <= type.columns.last)) {
+      return;
+    }
+    // Session ID and Process ID are null if they're not positive. Older files
+    // write them as unsigned 32-bit numbers, so -1 appears as 4294967295.
+    final processId = _signed32(int.parse(parts[3]));
+    final sessionId = _signed32(int.parse(parts[4]));
     // Timestamps are stored as true instants; the zone they are shown in is
     // applied only when formatting, by DisplayTime.
     final timestampMs = int.parse(parts[1]) * 1000;
@@ -486,14 +510,14 @@ class _StatmonParser {
         final stat = existingProcess.type.statistics[statIdx];
 
         existingProcess.statisticData[stat.name]!.addValue(
-          _parseStatValue(parts[statIdx + 6], stat.type).toDouble(),
+          _parseStatValue(parts[type.columns[statIdx]], stat.type).toDouble(),
         );
       }
     } else {
       // Otherwise, create new process entry
       final newProcess = Process(
         name: processName,
-        type: statTypes[statTypeId]!,
+        type: type,
         startTime: timestamp,
         endTime: timestamp,
         samples: 1,
@@ -513,10 +537,11 @@ class _StatmonParser {
       ) {
         final stat = newProcess.type.statistics[statIdx];
 
-        newProcess.statisticData[stat.name] = TimeSeries(
-          statistic: stat,
-          timestamps: timestamps,
-        )..addValue(_parseStatValue(parts[statIdx + 6], stat.type).toDouble());
+        newProcess.statisticData[stat
+            .name] = TimeSeries(statistic: stat, timestamps: timestamps)
+          ..addValue(
+            _parseStatValue(parts[type.columns[statIdx]], stat.type).toDouble(),
+          );
       }
 
       processes[processName]!.add(newProcess);
@@ -532,6 +557,14 @@ typedef _ParseResult = ({
   int? fileUtcOffsetMs,
   String? fileZoneAbbreviation,
 });
+
+/// [value] read as a signed 32-bit number, or null if it isn't positive.
+int? _signed32(int value) {
+  final signed = value >= 0x80000000 && value <= 0xFFFFFFFF
+      ? value - 0x100000000
+      : value;
+  return signed > 0 ? signed : null;
+}
 
 /// Parses a raw string value from the data file into the correct [num] type.
 ///
