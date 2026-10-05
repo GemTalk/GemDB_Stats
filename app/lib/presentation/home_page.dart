@@ -25,6 +25,9 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+/// Loads a file into DataManager, reporting progress from 0 to 1.
+typedef _Load = Future<void> Function(void Function(double) onProgress);
+
 class _HomePageState extends State<HomePage> {
   Process? selectedProcess;
   int? selectedStatistic;
@@ -33,8 +36,9 @@ class _HomePageState extends State<HomePage> {
   bool _loading = false;
   // Null while the size of the file is unknown.
   double? _loadProgress;
-  // The latest file the host asked for while another was loading.
-  embed.FileRequest? _pendingRequest;
+  // The latest file asked for while another was loading; it loads next.
+  ({String name, _Load load})? _pendingLoad;
+  bool _picking = false;
   late final StreamSubscription<embed.FileRequest> _fileRequests;
   String? _loadError;
   int _dataVersion = 0;
@@ -177,21 +181,23 @@ class _HomePageState extends State<HomePage> {
   /// Asks for a file: from the host page when embedded, which has the files,
   /// or from the local file picker.
   Future<void> _chooseFile() async {
-    if (_loading) {
-      return;
-    }
     if (embed.isEmbedded) {
       embed.requestFile();
       return;
     }
-    final file = await pickStatmonFile();
+    // One picker at a time.
+    if (_picking) {
+      return;
+    }
+    _picking = true;
+    final file = await pickStatmonFile().whenComplete(() => _picking = false);
     if (file == null) {
       return;
     }
     // The web has no file system, so there the picker hands over a stream
     // instead of a path.
     final stream = file.readStream;
-    await _load(
+    await _enqueue(
       file.name,
       (onProgress) => stream != null
           ? DataManager().loadFromStream(
@@ -203,13 +209,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Opens a file the host page asked for, after any load in progress.
-  Future<void> _openRequest(embed.FileRequest request) async {
-    if (_loading) {
-      _pendingRequest = request;
-      return;
-    }
-    await _load(request.name, (onProgress) async {
+  /// Opens a file the host page asked for.
+  Future<void> _openRequest(embed.FileRequest request) {
+    return _enqueue(request.name, (onProgress) async {
       final (:bytes, :length) = await embed.openUrl(request.url);
       if (length == null && mounted) {
         setState(() => _loadProgress = null);
@@ -220,17 +222,24 @@ class _HomePageState extends State<HomePage> {
         onProgress: length == null ? null : onProgress,
       );
     });
-    final pending = _pendingRequest;
-    _pendingRequest = null;
-    if (pending != null && mounted) {
-      await _openRequest(pending);
+  }
+
+  /// Loads a file now, or after the load in progress: loads share
+  /// DataManager, so they never overlap. Only the latest waiting file loads.
+  Future<void> _enqueue(String fileName, _Load load) async {
+    if (_loading) {
+      _pendingLoad = (name: fileName, load: load);
+      return;
+    }
+    await _load(fileName, load);
+    final next = _pendingLoad;
+    _pendingLoad = null;
+    if (next != null && mounted) {
+      await _enqueue(next.name, next.load);
     }
   }
 
-  Future<void> _load(
-    String fileName,
-    Future<void> Function(void Function(double) onProgress) load,
-  ) async {
+  Future<void> _load(String fileName, _Load load) async {
     _multiChart.reset();
 
     setState(() {

@@ -36,20 +36,30 @@ Stream<List<int>> gunzip(Stream<List<int>> input) async* {
     }
   }();
 
-  while (true) {
-    final web.ReadableStreamReadResult result;
-    try {
-      result = await reader.read().toDart;
-    } catch (e) {
-      if (inputError != null) {
-        throw inputError!;
+  var done = false;
+  try {
+    while (true) {
+      final web.ReadableStreamReadResult result;
+      try {
+        result = await reader.read().toDart;
+      } catch (e) {
+        if (inputError != null) {
+          throw inputError!;
+        }
+        throw FormatException('Not a valid gzip file: $e');
       }
-      throw FormatException('Not a valid gzip file: $e');
+      if (result.done) {
+        done = true;
+        break;
+      }
+      yield (result.value as JSUint8Array).toDart;
     }
-    if (result.done) {
-      break;
+  } finally {
+    // Stopped early, as when the file is rejected. Cancelling the output
+    // fails the next write, which ends the feeding and so the input.
+    if (!done) {
+      reader.cancel().toDart.ignore();
     }
-    yield (result.value as JSUint8Array).toDart;
   }
   await feeding;
 }

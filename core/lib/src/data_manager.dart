@@ -451,15 +451,20 @@ class _StatmonParser {
     final processes = _processes;
     final parts = line.split(' ');
 
-    final processName = parts[2];
-    final statTypeId = int.parse(parts[0]);
-    final type = statTypes[statTypeId];
-    // Skip a line of an undeclared type, or one cut short, such as a last line
-    // written as statmonitor stopped.
+    // Skip a line cut short, such as a last line written as statmonitor
+    // stopped: before the fields every line starts with (StatTypeNum through
+    // SessionId), or before its last statistic. Skip one of an undeclared
+    // type too.
+    if (parts.length < 5) {
+      return;
+    }
+    final type = statTypes[int.parse(parts[0])];
     if (type == null ||
         (type.columns.isNotEmpty && parts.length <= type.columns.last)) {
       return;
     }
+    final processName = parts[2];
+    final statTypeId = type.id;
     // Session ID and Process ID are null if they're not positive. Older files
     // write them as unsigned 32-bit numbers, so -1 appears as 4294967295.
     final processId = _signed32(int.parse(parts[3]));

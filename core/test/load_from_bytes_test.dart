@@ -139,6 +139,36 @@ ENDHEADER
     },
   );
 
+  test('a last line cut short anywhere is skipped', () async {
+    // Type 2 has no statistics, so its lines are only the leading fields.
+    const header = '''
+STATMON "4"
+StatTypes = [
+Shrpc  ( StatTypeNum Time ProcessName ProcessId SessionId CacheSerialNum DataPageReads ) 1 ,
+AppStat  ( StatTypeNum Time ProcessName ProcessId SessionId ) 2
+]
+ENDHEADER
+1 1771546154 ShrPcMonitor 18322 -1 0 10
+2 1771546154 app 7 3
+''';
+    for (final last in [
+      '1 1771546155 ShrPcMonitor 18322 -1 0 12',
+      '2 1771546155 app 7 3',
+    ]) {
+      // Cut after each whole field, short of the complete line.
+      final fields = last.split(' ');
+      for (var n = 1; n < fields.length; n++) {
+        final cut = fields.take(n).join(' ');
+        final dm = DataManager();
+        await dm.loadFromBytes(Uint8List.fromList(utf8.encode('$header$cut')));
+        expect(dm.allProcesses.map((p) => p.samples), [
+          1,
+          1,
+        ], reason: 'last line "$cut"');
+      }
+    }
+  });
+
   test(
     'loadFromStream gives up early on a large file with no header',
     () async {

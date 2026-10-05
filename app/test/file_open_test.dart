@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -24,6 +25,10 @@ ENDHEADER
 /// Returns a file the way the web picker does: a stream and no path.
 class _FakeFilePicker extends FilePicker {
   bool? withReadStream;
+  int calls = 0;
+
+  /// When set, the picker stays open until this completes.
+  Completer<void>? open;
 
   @override
   Future<FilePickerResult?> pickFiles({
@@ -41,6 +46,8 @@ class _FakeFilePicker extends FilePicker {
     bool readSequential = false,
   }) async {
     this.withReadStream = withReadStream;
+    calls++;
+    await open?.future;
     final bytes = Uint8List.fromList(utf8.encode(_statmon));
     return FilePickerResult([
       PlatformFile(
@@ -81,5 +88,31 @@ void main() {
     expect(find.text('ShrPcMonitor'), findsWidgets);
     // HomePage's menu bar holds macOS-only items; other platforms throw while
     // serializing it in tests, as in home_page_menu_test.dart.
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a second click while the picker is open opens no second picker', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final picker = _FakeFilePicker()..open = Completer<void>();
+    FilePicker.platform = picker;
+    tester.view
+      ..physicalSize = const Size(1440, 900)
+      ..devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(home: HomePage()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('No file selected'));
+    await tester.pump();
+    await tester.tap(find.text('No file selected'));
+    await tester.pump();
+    expect(picker.calls, 1);
+
+    picker.open!.complete();
+    for (var i = 0; i < 50 && find.text('ShrPcMonitor').evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(find.text('ShrPcMonitor'), findsWidgets);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 }

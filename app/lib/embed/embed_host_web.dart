@@ -17,8 +17,9 @@ final JSObject? _vscode = globalContext.has('acquireVsCodeApi')
 /// Whether a host page (a VS Code webview) decides which file is shown.
 bool get isEmbedded => _vscode != null;
 
-/// The file the page's own URL asks for, if any.
-FileRequest? get initialFileRequest => fileRequestFromQuery(Uri.base);
+/// The file the page's own URL asks for, if any. Embedded, only the host
+/// chooses the file.
+FileRequest? get initialFileRequest => isEmbedded ? null : fileRequestFromQuery(Uri.base);
 
 /// Files the host asks to open. Listen before calling [notifyReady].
 final Stream<FileRequest> fileRequests = _listenForRequests();
@@ -63,12 +64,21 @@ Future<({Stream<List<int>> bytes, int? length})> openUrl(Uri url) async {
   }
   final reader = body.getReader() as web.ReadableStreamDefaultReader;
   Stream<List<int>> read() async* {
-    while (true) {
-      final chunk = await reader.read().toDart;
-      if (chunk.done) {
-        break;
+    var done = false;
+    try {
+      while (true) {
+        final chunk = await reader.read().toDart;
+        if (chunk.done) {
+          done = true;
+          break;
+        }
+        yield (chunk.value as JSUint8Array).toDart;
       }
-      yield (chunk.value as JSUint8Array).toDart;
+    } finally {
+      // Stopped early, as when the file is rejected: stop the download too.
+      if (!done) {
+        reader.cancel().toDart.ignore();
+      }
     }
   }
 
