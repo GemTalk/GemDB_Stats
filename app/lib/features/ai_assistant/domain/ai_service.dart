@@ -262,8 +262,8 @@ class AiService {
     final dm = DataManager();
     final buf = StringBuffer()
       ..writeln(
-        'You are an analytics assistant for VSD (Virtual Statistics Display), '
-        'a performance monitoring tool for GemStone Smalltalk processes. '
+        'You are an analytics assistant for GemDB Stats (successor to GemStone VSD), '
+        'a performance monitoring tool for GemDB (GemStone) processes. '
         'You help users understand process performance data loaded from statmon files.',
       );
 

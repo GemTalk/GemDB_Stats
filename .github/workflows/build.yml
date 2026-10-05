@@ -15,6 +15,21 @@ on:
         description: macOS
         type: boolean
         default: true
+  workflow_call:
+    inputs:
+      linux:
+        type: boolean
+        default: true
+      windows:
+        type: boolean
+        default: true
+      macos:
+        type: boolean
+        default: true
+      ref:
+        description: Commit, branch or tag to build; defaults to the triggering ref
+        type: string
+        default: ''
 
 jobs:
   linux:
@@ -23,6 +38,8 @@ jobs:
     if: ${{ inputs.linux }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
 
       - id: vars
         run: echo "sha_short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
@@ -36,7 +53,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: vsd-${{ steps.vars.outputs.sha_short }}-linux
+          name: gemdb-stats-${{ steps.vars.outputs.sha_short }}-linux
           path: app/build/linux/x64/release/bundle/
           retention-days: 90
 
@@ -46,6 +63,8 @@ jobs:
     if: ${{ inputs.windows }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
 
       - id: vars
         shell: bash
@@ -61,7 +80,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: vsd-${{ steps.vars.outputs.sha_short }}-windows
+          name: gemdb-stats-${{ steps.vars.outputs.sha_short }}-windows
           path: app/build/windows/x64/runner/Release/
           retention-days: 90
 
@@ -71,6 +90,8 @@ jobs:
     if: ${{ inputs.macos }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
 
       - id: vars
         run: echo "sha_short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
@@ -93,6 +114,6 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: vsd-${{ steps.vars.outputs.sha_short }}-macos
-          path: app/build/macos/Build/Products/Release/vsd.app.zip
+          name: gemdb-stats-${{ steps.vars.outputs.sha_short }}-macos
+          path: app/build/macos/Build/Products/Release/GemDB-Stats.zip
           retention-days: 90

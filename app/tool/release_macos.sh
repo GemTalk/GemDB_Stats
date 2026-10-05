@@ -2,8 +2,8 @@
 #
 # Build, sign, notarize and package the macOS app for distribution.
 #
-# Produces build/macos/dist/vsd-<version>.dmg — a signed, notarized and
-# stapled disk image containing a signed, notarized and stapled vsd.app.
+# Produces build/macos/dist/GemDB-Stats-<version>.dmg — a signed, notarized and
+# stapled disk image containing a signed, notarized and stapled "GemDB Stats.app".
 #
 # Credentials (one of):
 #   1. A notarytool keychain profile (preferred). Create it once with:
@@ -27,7 +27,7 @@ SIGN_ID="${SIGN_ID:-Developer ID Application}"
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$APP_DIR/build/macos/Build/Products/Release"
 DIST_DIR="$APP_DIR/build/macos/dist"
-APP_BUNDLE="$BUILD_DIR/vsd.app"
+APP_BUNDLE="$BUILD_DIR/GemDB Stats.app"
 ENTITLEMENTS="$APP_DIR/macos/Runner/Release.entitlements"
 
 SKIP_NOTARIZE=0
@@ -65,7 +65,7 @@ fi
 
 # --- Build -------------------------------------------------------------------
 
-step "Building vsd $VERSION (release)"
+step "Building GemDB Stats $VERSION (release)"
 cd "$APP_DIR"
 flutter build macos --release
 
@@ -96,8 +96,8 @@ codesign -dvv "$APP_BUNDLE" 2>&1 | grep -E 'Authority|TeamIdentifier|flags'
 # --- Notarize the app --------------------------------------------------------
 
 mkdir -p "$DIST_DIR"
-DMG="$DIST_DIR/vsd-$VERSION.dmg"
-ZIP="$DIST_DIR/vsd-$VERSION.zip"
+DMG="$DIST_DIR/GemDB-Stats-$VERSION.dmg"
+ZIP="$DIST_DIR/GemDB-Stats-$VERSION.zip"
 
 if [[ $SKIP_NOTARIZE -eq 0 ]]; then
   step "Notarizing app (this can take a few minutes)"
@@ -120,7 +120,7 @@ ln -s /Applications "$STAGE/Applications"
 
 rm -f "$DMG"
 hdiutil create \
-  -volname "vsd $VERSION" \
+  -volname "GemDB Stats $VERSION" \
   -srcfolder "$STAGE" \
   -fs HFS+ \
   -format UDZO \
