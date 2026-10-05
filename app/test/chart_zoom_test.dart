@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:cristalyse/cristalyse.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,15 +9,23 @@ import 'package:vsd/presentation/chart/multi_statistic_line_chart.dart';
 import 'package:vsd/presentation/chart/statistic_line_chart.dart';
 import 'package:vsd_core/vsd_core.dart';
 
-List<DataPoint> _points({int count = 20}) {
+List<DataPoint> _points({int count = 20, double offset = 0}) {
   final base = DateTime.utc(2026, 1, 1, 12);
   return List.generate(
     count,
     (i) => DataPoint(
       timestamp: base.add(Duration(seconds: i * 10)),
-      value: 100 + (i % 5) * 20,
+      value: offset + 100 + (i % 5) * 20,
     ),
   );
+}
+
+typedef _Limits = ({(double?, double?)? x, (double?, double?)? y, (double?, double?)? y2});
+
+// The axis ranges the chart is currently drawn with.
+_Limits _limits(WidgetTester tester) {
+  final chart = tester.widget<AnimatedCristalyseChartWidget>(find.byType(AnimatedCristalyseChartWidget));
+  return (x: chart.xScale?.limits, y: chart.yScale?.limits, y2: chart.y2Scale?.limits);
 }
 
 Future<void> _pumpSized(WidgetTester tester, Widget child) async {
@@ -95,18 +106,42 @@ void main() {
   testWidgets('MultiStatisticLineChart keeps its zoom when a series is added', (tester) async {
     final a = (name: 'A', color: kMultiChartPalette[0], points: _points());
     await _pumpSized(tester, MultiStatisticLineChart(primarySeries: [a], secondarySeries: const []));
+    final full = _limits(tester);
 
     await _dragBox(tester);
-    expect(find.byTooltip('Reset zoom'), findsOneWidget);
+    final zoomed = _limits(tester);
+    final (zoomMinX, zoomMaxX) = zoomed.x!;
+    final (zoomMinY, zoomMaxY) = zoomed.y!;
+    expect(zoomed.x, isNot(full.x));
+    expect(zoomed.y, isNot(full.y));
+    // The window still shows some of the plotted data.
+    expect(
+      a.points.any((p) {
+        final x = p.timestamp.millisecondsSinceEpoch;
+        return x >= zoomMinX! && x <= zoomMaxX! && p.value >= zoomMinY! && p.value <= zoomMaxY!;
+      }),
+      isTrue,
+    );
+
+    // Each added series widens the full range in both directions, so a lost
+    // zoom would change the drawn limits.
 
     // Another left-axis series.
-    final b = (name: 'B', color: kMultiChartPalette[1], points: _points(count: 30));
+    final b = (name: 'B', color: kMultiChartPalette[1], points: _points(count: 30, offset: 500));
     await _pumpSized(tester, MultiStatisticLineChart(primarySeries: [a, b], secondarySeries: const []));
+    expect(_limits(tester).x, zoomed.x);
+    expect(_limits(tester).y, zoomed.y);
     expect(find.byTooltip('Reset zoom'), findsOneWidget);
 
-    // A right-axis series, which turns the chart dual-axis.
-    final c = (name: 'C', color: kMultiChartPalette[2], points: _points(count: 25));
+    // A right-axis series, which turns the chart dual-axis. The left axis keeps
+    // its window; the new right axis starts at its full range.
+    final c = (name: 'C', color: kMultiChartPalette[2], points: _points(count: 40, offset: 1000));
     await _pumpSized(tester, MultiStatisticLineChart(primarySeries: [a, b], secondarySeries: [c]));
+    expect(_limits(tester).x, zoomed.x);
+    expect(_limits(tester).y, zoomed.y);
+    final (y2Min, y2Max) = _limits(tester).y2!;
+    expect(y2Min, lessThanOrEqualTo(c.points.map((p) => p.value).reduce(math.min)));
+    expect(y2Max, greaterThanOrEqualTo(c.points.map((p) => p.value).reduce(math.max)));
     expect(find.byTooltip('Reset zoom'), findsOneWidget);
   });
 
