@@ -19,7 +19,7 @@ class FileBar extends StatefulWidget {
 
   /// Space kept free on each side of the bar when there is a [leading]
   /// widget: on its side so the name never runs under it, and on the other so
-  /// the name stays centered.
+  /// the name, with any [trailing] widget beside it, stays centered.
   static const double leadingSlot = 40;
   final Widget? trailing;
 
