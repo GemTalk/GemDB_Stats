@@ -92,6 +92,24 @@ void main() {
     expect(find.byTooltip('Reset zoom'), findsOneWidget);
   });
 
+  testWidgets('MultiStatisticLineChart keeps its zoom when a series is added', (tester) async {
+    final a = (name: 'A', color: kMultiChartPalette[0], points: _points());
+    await _pumpSized(tester, MultiStatisticLineChart(primarySeries: [a], secondarySeries: const []));
+
+    await _dragBox(tester);
+    expect(find.byTooltip('Reset zoom'), findsOneWidget);
+
+    // Another left-axis series.
+    final b = (name: 'B', color: kMultiChartPalette[1], points: _points(count: 30));
+    await _pumpSized(tester, MultiStatisticLineChart(primarySeries: [a, b], secondarySeries: const []));
+    expect(find.byTooltip('Reset zoom'), findsOneWidget);
+
+    // A right-axis series, which turns the chart dual-axis.
+    final c = (name: 'C', color: kMultiChartPalette[2], points: _points(count: 25));
+    await _pumpSized(tester, MultiStatisticLineChart(primarySeries: [a, b], secondarySeries: [c]));
+    expect(find.byTooltip('Reset zoom'), findsOneWidget);
+  });
+
   testWidgets('StatisticLineChart double-tap resets zoom', (tester) async {
     await _pumpSized(tester, StatisticLineChart(points: _points(), statisticName: 'CpuLoad'));
 
