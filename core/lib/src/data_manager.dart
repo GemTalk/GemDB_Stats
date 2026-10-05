@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:vsd_core/src/models/display_time.dart';
@@ -116,8 +117,10 @@ class DataManager {
         final lines = (partialLine + text).split('\n');
         partialLine = lines.removeLast();
         lines.forEach(parser.addLine);
+        // A server may decompress in transit, so more bytes arrive than its
+        // Content-Length said.
         if (length != null && length > 0) {
-          progress(bytesRead / length);
+          progress(math.min(bytesRead / length, 1));
         }
         // On the web this runs on the UI thread: let it paint now and then.
         if (sinceYield.elapsedMilliseconds > 50) {

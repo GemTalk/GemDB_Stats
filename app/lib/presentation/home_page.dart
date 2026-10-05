@@ -1,8 +1,10 @@
-import 'package:file_picker/file_picker.dart';
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:multi_split_view/multi_split_view.dart';
+import 'package:vsd/embed/embed_host.dart' as embed;
 import 'package:vsd/features/ai_assistant/presentation/components/ai_assistant_panel_platform.dart';
 import 'package:vsd/presentation/_reusable_components/tool_icon_button.dart';
 import 'package:vsd/presentation/chart/multi_chart_controller.dart';
@@ -27,7 +29,13 @@ class _HomePageState extends State<HomePage> {
   Process? selectedProcess;
   int? selectedStatistic;
   final MultiChartController _multiChart = MultiChartController();
+  String? _fileName;
+  bool _loading = false;
+  // Null while the size of the file is unknown.
   double? _loadProgress;
+  // The latest file the host asked for while another was loading.
+  embed.FileRequest? _pendingRequest;
+  late final StreamSubscription<embed.FileRequest> _fileRequests;
   String? _loadError;
   int _dataVersion = 0;
   bool _aiPanelOpen = false;
@@ -115,10 +123,21 @@ class _HomePageState extends State<HomePage> {
     _chartPaneController = MultiSplitViewController();
     _chartPaneController.areas = [chartArea()];
     _multiChart.addListener(_syncLegendPane);
+
+    // On the web, the page hosting the app may say which file to show.
+    _fileRequests = embed.fileRequests.listen(_openRequest);
+    embed.notifyReady();
+    final initial = embed.initialFileRequest;
+    if (initial != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(_openRequest(initial)),
+      );
+    }
   }
 
   @override
   void dispose() {
+    unawaited(_fileRequests.cancel());
     _multiChart.removeListener(_syncLegendPane);
     _mainController.dispose();
     _chartPaneController.dispose();
@@ -155,45 +174,92 @@ class _HomePageState extends State<HomePage> {
     setState(() => _zone = zone);
   }
 
-  Future<void> _handleFileSelected(PlatformFile file) async {
-    // _loadProgress is null when not loading
-    if (_loadProgress != null) {
+  /// Asks for a file: from the host page when embedded, which has the files,
+  /// or from the local file picker.
+  Future<void> _chooseFile() async {
+    if (_loading) {
       return;
     }
+    if (embed.isEmbedded) {
+      embed.requestFile();
+      return;
+    }
+    final file = await pickStatmonFile();
+    if (file == null) {
+      return;
+    }
+    // The web has no file system, so there the picker hands over a stream
+    // instead of a path.
+    final stream = file.readStream;
+    await _load(
+      file.name,
+      (onProgress) => stream != null
+          ? DataManager().loadFromStream(
+              stream,
+              length: file.size,
+              onProgress: onProgress,
+            )
+          : DataManager().loadFromFile(file.path!, onProgress: onProgress),
+    );
+  }
 
+  /// Opens a file the host page asked for, after any load in progress.
+  Future<void> _openRequest(embed.FileRequest request) async {
+    if (_loading) {
+      _pendingRequest = request;
+      return;
+    }
+    await _load(request.name, (onProgress) async {
+      final (:bytes, :length) = await embed.openUrl(request.url);
+      if (length == null && mounted) {
+        setState(() => _loadProgress = null);
+      }
+      await DataManager().loadFromStream(
+        bytes,
+        length: length,
+        onProgress: length == null ? null : onProgress,
+      );
+    });
+    final pending = _pendingRequest;
+    _pendingRequest = null;
+    if (pending != null && mounted) {
+      await _openRequest(pending);
+    }
+  }
+
+  Future<void> _load(
+    String fileName,
+    Future<void> Function(void Function(double) onProgress) load,
+  ) async {
     _multiChart.reset();
 
     setState(() {
+      _fileName = fileName;
+      _loading = true;
       _loadProgress = 0.0;
       _loadError = null;
       selectedProcess = null;
       selectedStatistic = null;
     });
     try {
-      void onProgress(double p) {
+      await load((p) {
         if (mounted) {
           setState(() => _loadProgress = p);
         }
-      }
-
-      // The web has no file system, so there the picker hands over a stream
-      // instead of a path.
-      if (file.readStream != null) {
-        await DataManager().loadFromStream(
-          file.readStream!,
-          length: file.size,
-          onProgress: onProgress,
-        );
-      } else {
-        await DataManager().loadFromFile(file.path!, onProgress: onProgress);
+      });
+      if (!mounted) {
+        return;
       }
       setState(() {
-        _loadProgress = null;
+        _loading = false;
         _dataVersion++;
       });
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
-        _loadProgress = null;
+        _loading = false;
         _loadError = e.toString();
       });
     }
@@ -207,7 +273,8 @@ class _HomePageState extends State<HomePage> {
         body: Column(
           children: [
             FileBar(
-              onFileSelected: _handleFileSelected,
+              fileName: _fileName,
+              onTap: _chooseFile,
               // The AI assistant is left out of the web build for now: a
               // browser would need a CORS opt-in and would hold the API key.
               trailing: kIsWeb
@@ -218,7 +285,7 @@ class _HomePageState extends State<HomePage> {
                       onTap: _toggleAiPanel,
                     ),
             ),
-            if (_loadProgress != null)
+            if (_loading)
               progressIndicator()
             else if (_loadError != null)
               Expanded(
@@ -255,7 +322,7 @@ class _HomePageState extends State<HomePage> {
               LinearProgressIndicator(value: _loadProgress),
               const SizedBox(height: 8),
               Text(
-                '${(_loadProgress! * 100).round()}%',
+                _loadProgress == null ? 'Loading…' : '${(_loadProgress! * 100).round()}%',
                 style: const TextStyle(fontSize: 13, color: Colors.black54),
               ),
             ],

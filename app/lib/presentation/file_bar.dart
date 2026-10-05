@@ -6,12 +6,35 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _kLastDirectoryKey = 'last_file_directory';
 
-class FileBar extends StatefulWidget {
-  const FileBar({super.key, this.onFileSelected, this.trailing});
+/// Lets the user pick a statmon file. On the web the file carries a stream
+/// of its bytes and no path; elsewhere it carries a path and no stream.
+Future<PlatformFile?> pickStatmonFile() async {
+  final prefs = await SharedPreferences.getInstance();
+  final lastDir = prefs.getString(_kLastDirectoryKey);
 
-  /// Called with the picked file. On the web it carries a stream of the
-  /// file's bytes and no path; elsewhere it carries a path and no stream.
-  final ValueChanged<PlatformFile>? onFileSelected;
+  final result = await FilePicker.platform.pickFiles(
+    initialDirectory: kIsWeb ? null : lastDir,
+    // Streamed, not read whole first: the load can start, and show its
+    // progress, as soon as the file is picked.
+    withReadStream: kIsWeb,
+  );
+  if (result == null) {
+    return null;
+  }
+  final file = result.files.single;
+  // The web has no file system, so there is no folder to remember.
+  if (!kIsWeb && file.path != null) {
+    await prefs.setString(_kLastDirectoryKey, p.dirname(file.path!));
+  }
+  return file;
+}
+
+/// Shows the open file's name; tapping it asks for another file.
+class FileBar extends StatefulWidget {
+  const FileBar({super.key, this.fileName, this.onTap, this.trailing});
+
+  final String? fileName;
+  final VoidCallback? onTap;
   final Widget? trailing;
 
   @override
@@ -19,38 +42,11 @@ class FileBar extends StatefulWidget {
 }
 
 class _FileBarState extends State<FileBar> {
-  String? _fileName;
   bool _isHovering = false;
 
-  Future<void> _pickFile() async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastDir = prefs.getString(_kLastDirectoryKey);
-
-    final result = await FilePicker.platform.pickFiles(
-      initialDirectory: kIsWeb ? null : lastDir,
-      // Streamed, not read whole first: the load can start, and show its
-      // progress, as soon as the file is picked.
-      withReadStream: kIsWeb,
-    );
-
-    if (result != null) {
-      final file = result.files.single;
-      var name = file.name;
-
-      // The web has no file system, so there is no folder to remember.
-      if (!kIsWeb && file.path != null) {
-        await prefs.setString(_kLastDirectoryKey, p.dirname(file.path!));
-      }
-
-      if (name.endsWith('.gz')) {
-        name = name.substring(0, name.length - 3);
-      }
-
-      setState(() {
-        _fileName = name;
-      });
-      widget.onFileSelected?.call(file);
-    }
+  String? get _fileName {
+    final name = widget.fileName;
+    return name != null && name.endsWith('.gz') ? name.substring(0, name.length - 3) : name;
   }
 
   @override
@@ -85,7 +81,7 @@ class _FileBarState extends State<FileBar> {
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
       child: GestureDetector(
-        onTap: _pickFile,
+        onTap: widget.onTap,
         child: Container(
           constraints: const BoxConstraints(maxWidth: 800),
           height: 26,
