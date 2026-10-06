@@ -10,12 +10,16 @@
 Visualization and AI-assisted analysis for GemDB (GemStone/S) performance statistics.
 
 GemDB Stats reads the **statmon** files produced by GemStone's `statmonitor`
-utility and lets you explore them two ways:
+utility and lets you explore them three ways:
 
 - A **desktop app** for macOS, Windows and Linux: a modernized take on the
   Tcl/Tk [VSD 5.x](https://gemtalksystems.com/products/vsd/). Browse
   processes, plot any statistic, compare processes side by side, and ask an AI
   assistant questions about what you see.
+- A **web version** at
+  [gemtalk.github.io/GemDB_Stats](https://gemtalk.github.io/GemDB_Stats/):
+  the same app in your browser, with no install. It has everything but the AI
+  assistant, and your file never leaves your machine.
 - An **MCP server** that exposes the same analysis tools to any
   [Model Context Protocol](https://modelcontextprotocol.io) client, so Claude
   Desktop or Claude Code can work through a statmon file with you.
@@ -68,10 +72,8 @@ in each version is in the [changelog](CHANGELOG.md).
 | Windows | Unzip and run `GemDBStats.exe`. Keep the `data/` folder and DLLs next to it. |
 | Linux | Extract the bundle and run `./gemdb-stats`. Needs a GTK 3 runtime (`libgtk-3-0`). |
 
-Or use it in your browser at
-[gemtalk.github.io/GemDB_Stats](https://gemtalk.github.io/GemDB_Stats/), with
-no install. The web version has everything but the AI assistant, and your file
-never leaves your machine.
+Or skip the download and use the
+[web version](https://gemtalk.github.io/GemDB_Stats/) in your browser.
 
 ### Open a statmon file
 
