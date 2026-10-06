@@ -13,12 +13,23 @@ set -euo pipefail
 
 FILE="${CHANGELOG:-CHANGELOG.md}"
 
-# Prints the body of the section headed "## [$1]", trimmed of blank lines.
+# The name of the section a "## [name] ..." heading starts, or "" for another
+# line. Every command finds sections with it, so they agree on what a heading
+# is, trailing spaces and all.
+NAME='
+  function name(line) {
+    if (index(line, "## [") != 1) return ""
+    line = substr(line, 5)
+    return substr(line, 1, index(line, "]") - 1)
+  }
+'
+
+# Prints the body of section $1, trimmed of blank lines.
 section() {
-  awk -v want="## [$1]" '
-    index($0, "## [") == 1 {
+  awk -v want="$1" "$NAME"'
+    index($0, "## ") == 1 {
       if (on) exit
-      on = (index($0, want) == 1)
+      on = (name($0) == want)
       next
     }
     on && /^\[[^]]+\]: / { exit } # link definitions at the end of the file
@@ -31,14 +42,27 @@ section() {
   ' "$FILE"
 }
 
+has_section() {
+  awk -v want="$1" "$NAME"'
+    name($0) == want { found = 1; exit }
+    END { exit !found }
+  ' "$FILE"
+}
+
+# Whether section $1 has an entry: a line that's neither blank nor a
+# "### Added" style heading.
+has_entries() {
+  section "$1" | grep -qvE '^([[:space:]]*|###.*)$'
+}
+
 release() {
   local version="$1" date="$2"
 
-  if [[ -z "$(section Unreleased)" ]]; then
+  if ! has_entries Unreleased; then
     echo "::error::$FILE has no entries under [Unreleased]" >&2
     exit 1
   fi
-  if grep -qF "## [$version]" "$FILE"; then
+  if has_section "$version"; then
     echo "::error::$FILE already has a [$version] section" >&2
     exit 1
   fi
@@ -49,9 +73,9 @@ release() {
 
   # Starts the version's section under an empty Unreleased one, and points the
   # links at the new tag.
-  awk -v v="$version" -v d="$date" '
-    $0 == "## [Unreleased]" {
-      print; print ""; print "## [" v "] - " d
+  awk -v v="$version" -v d="$date" "$NAME"'
+    name($0) == "Unreleased" {
+      print "## [Unreleased]"; print ""; print "## [" v "] - " d
       next
     }
     /^\[Unreleased\]: / {
@@ -63,6 +87,13 @@ release() {
     }
     { print }
   ' "$FILE" > "$FILE.tmp"
+
+  # The release commit must carry the entries under the new version.
+  if ! FILE="$FILE.tmp" has_entries "$version" || FILE="$FILE.tmp" has_entries Unreleased; then
+    rm -f "$FILE.tmp"
+    echo "::error::Could not move the [Unreleased] entries under [$version]" >&2
+    exit 1
+  fi
   mv "$FILE.tmp" "$FILE"
 }
 
