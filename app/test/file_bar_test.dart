@@ -1,39 +1,12 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vsd/presentation/file_bar.dart';
 
 const _longName = 'statmonitor_tanistone_production_cluster_2026-05-27T00-00-00.out.gz';
 const _shown = 'statmonitor_tanistone_production_cluster_2026-05-27T00-00-00.out';
 
-class _FakeFilePicker extends FilePicker {
-  @override
-  Future<FilePickerResult?> pickFiles({
-    String? dialogTitle,
-    String? initialDirectory,
-    FileType type = FileType.any,
-    List<String>? allowedExtensions,
-    Function(FilePickerStatus)? onFileLoading,
-    bool allowCompression = false,
-    int compressionQuality = 0,
-    bool allowMultiple = false,
-    bool withData = false,
-    bool withReadStream = false,
-    bool lockParentWindow = false,
-    bool readSequential = false,
-  }) async => FilePickerResult([
-    PlatformFile(name: _longName, path: '/stats/$_longName', size: 0),
-  ]);
-}
-
 void main() {
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
-    FilePicker.platform = _FakeFilePicker();
-  });
-
   /// Shows a long file name in a bar [width] wide, with a stand-in for the
   /// 32-pixel menu button and, if [trailing], the 28-pixel chat button.
   Future<void> pumpBar(
@@ -50,15 +23,15 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: FileBar(
-            onFileSelected: (_) {},
+            fileName: _longName,
+            onTap: () {},
             leading: leading ? const SizedBox(key: Key('menu'), width: 32, height: 32) : null,
             trailing: trailing ? const SizedBox(key: Key('chat'), width: 28, height: 28) : null,
           ),
         ),
       ),
     );
-    await tester.tap(find.text('No file selected'));
-    await tester.pumpAndSettle();
+    await tester.pump();
   }
 
   for (final width in [1280.0, 600.0, 300.0]) {
