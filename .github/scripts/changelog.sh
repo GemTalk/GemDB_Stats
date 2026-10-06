@@ -50,9 +50,10 @@ has_section() {
 }
 
 # Whether section $1 has an entry: a line that's neither blank nor a
-# "### Added" style heading.
+# "### Added" style heading. Not grep -q: it would stop reading at the first
+# entry, and under pipefail a long section's writer then fails with SIGPIPE.
 has_entries() {
-  section "$1" | grep -qvE '^([[:space:]]*|###.*)$'
+  section "$1" | grep -vE '^([[:space:]]*|###.*)$' > /dev/null
 }
 
 release() {
