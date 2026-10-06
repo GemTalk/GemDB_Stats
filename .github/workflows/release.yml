@@ -3,9 +3,12 @@ name: release
 # Publishes a GitHub release with the macOS, Windows and Linux apps and the web
 # build GemDB Code embeds (docs/embedding.md). Run it from
 # the Actions tab on main and enter the new version: it sets that version in
-# app/pubspec.yaml, commits to main, tags the commit, builds the ticked
-# platforms from the tag with build.yml, and attaches them to a release. A
-# version with a suffix (0.2.0-beta.1) is a pre-release.
+# app/pubspec.yaml, files CHANGELOG.md's Unreleased entries under it, commits
+# to main, tags the commit, builds the ticked platforms from the tag with
+# build.yml, and attaches them to a release whose notes are that changelog
+# section. A version with a suffix (0.2.0-beta.1) is a pre-release: it leaves
+# CHANGELOG.md alone and its notes preview the Unreleased entries.
+# docs/releasing.md has the whole process.
 #
 # A tag pushed with GITHUB_TOKEN starts no other workflow run, so this run
 # carries on to build and publish itself rather than rely on the tag push.
@@ -93,10 +96,15 @@ jobs:
         env:
           TAG: ${{ steps.vars.outputs.tag }}
           VERSION: ${{ steps.vars.outputs.version }}
+          PRERELEASE: ${{ steps.vars.outputs.prerelease }}
         run: |
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
             echo "::error::Tag $TAG already exists"
             exit 1
+          fi
+
+          if [[ "$PRERELEASE" != true ]]; then
+            .github/scripts/changelog.sh release "$VERSION" "$(date -u +%F)"
           fi
 
           # Keep a +build suffix if pubspec has one, bumped by one.
@@ -137,6 +145,10 @@ jobs:
       PRERELEASE: ${{ needs.version.outputs.prerelease }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
       # One folder per platform the build ran for, named gemdb-stats-<sha>-<platform>.
       - uses: actions/download-artifact@v8
         with:
@@ -177,12 +189,19 @@ jobs:
           sha256sum GemDB-Stats-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      # The changelog section comes first, then GitHub's list of merged PRs.
       - run: |
+          section="$VERSION"
+          [[ "$PRERELEASE" == true ]] && section=Unreleased
+          .github/scripts/changelog.sh notes "$section" > notes.md
+          cat notes.md
+
           flags=()
           [[ "$PRERELEASE" == true ]] && flags+=(--prerelease)
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "GemDB Stats $VERSION" \
+            --notes-file notes.md \
             --generate-notes \
             --verify-tag \
             "${flags[@]}"
