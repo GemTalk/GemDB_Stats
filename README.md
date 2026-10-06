@@ -59,7 +59,8 @@ on YouTube.
 ### Download
 
 Grab the latest build for your platform from the
-[Releases page](https://github.com/GemTalk/GemDB_Stats/releases).
+[Releases page](https://github.com/GemTalk/GemDB_Stats/releases). What's new
+in each version is in the [changelog](CHANGELOG.md).
 
 | Platform | Install |
 | --- | --- |
@@ -141,8 +142,8 @@ in [mcp/README.md](mcp/README.md).
 The web build can run inside another page, such as a VS Code webview, with the
 host page choosing the file to show. See [docs/embedding.md](docs/embedding.md).
 
-## Development notes
+## Contributing
 
-The GemStone statistic definitions are embedded in `vsd_core` as generated
-code. To update them, replace `core/tool/vsd.stats.tcl` and run
-`dart run tool/gen_stat_definitions.dart` from `core/`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setting up, running the checks and
+opening a pull request, and [docs/releasing.md](docs/releasing.md) for
+publishing a release.
