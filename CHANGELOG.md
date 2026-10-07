@@ -8,6 +8,13 @@ All notable changes to GemDB Stats are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The web version opens a gzipped statmon file that statmonitor is still
+  writing, with all its samples so far, as the desktop app does. It failed
+  with "Compressed input was truncated."
+  ([#16](https://github.com/GemTalk/GemDB_Stats/pull/16))
+
 ## [1.1.0] - 2026-10-06
 
 ### Added

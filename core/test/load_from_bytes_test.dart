@@ -169,6 +169,25 @@ ENDHEADER
     }
   });
 
+  test('loads a gzipped file statmonitor is still writing', () async {
+    // Until statmonitor stops, its file lacks the gzip trailer. zlib (on
+    // native platforms) and the web's decompressor must both still read it.
+    final unfinished = gzipped.sublist(0, gzipped.length - 8);
+    final dm = DataManager();
+    await dm.loadFromStream(
+      Stream.value(unfinished),
+      length: unfinished.length,
+    );
+
+    final process = dm.allProcesses.single;
+    expect(process.samples, 3);
+    expect(process.statisticData['DataPageReads']!.points.map((p) => p.value), [
+      10,
+      12,
+      15,
+    ]);
+  });
+
   test(
     'loadFromStream gives up early on a large file with no header',
     () async {
