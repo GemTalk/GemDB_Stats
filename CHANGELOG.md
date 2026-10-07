@@ -8,6 +8,8 @@ All notable changes to GemDB Stats are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-07
+
 ### Fixed
 
 - The web version opens a gzipped statmon file that statmonitor is still
@@ -68,6 +70,7 @@ Linux.
 - Use the same analysis tools from any MCP client with the standalone MCP
   server.
 
-[Unreleased]: https://github.com/GemTalk/GemDB_Stats/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/GemTalk/GemDB_Stats/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/GemTalk/GemDB_Stats/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/GemTalk/GemDB_Stats/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/GemTalk/GemDB_Stats/releases/tag/v1.0.0
